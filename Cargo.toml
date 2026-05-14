@@ -1,0 +1,42 @@
+[package]
+name = "lazyrsync"
+version = "0.1.0"
+edition = "2021"
+description = "A terminal UI for rsync — profiles, honest dry-run preview, live progress. Runs over SSH where no GUI can."
+license = "MIT"
+repository = "https://github.com/westpoint-io/lazyrsync"
+homepage = "https://lazyrsync.westpoint.io"
+documentation = "https://lazyrsync.westpoint.io/docs/install"
+readme = "README.md"
+keywords = ["rsync", "tui", "backup", "sync", "ratatui"]
+categories = ["command-line-utilities"]
+
+# cargo-binstall resolves GitHub Release assets produced by release.yml
+# (asset name: lazyrsync-<target>.tar.gz, binary at the archive root).
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+dhat = "0.3"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.profiling]
+inherits = "release"
+strip = false
+debug = "line-tables-only"
