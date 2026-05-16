@@ -45,3 +45,49 @@ fn main() -> anyhow::Result<()> {
                 for t in &p.tasks {
                     println!("  {}", t.id);
                     println!("      {}", rsync::resolved_command(t, false));
+                }
+                println!();
+            }
+            Ok(())
+        }
+        Some(Command::Run { profile, dry_run }) => {
+            let store = store::Store::load()?;
+            let p = store
+                .profiles
+                .iter()
+                .find(|p| p.name == profile)
+                .ok_or_else(|| anyhow::anyhow!("no profile named '{profile}'"))?;
+            for t in &p.tasks {
+                println!("{}", rsync::resolved_command(t, dry_run));
+            }
+            eprintln!("(execution engine not wired yet — command shown above)");
+            Ok(())
+        }
+        None => {
+            let mut app = app::App::new()?;
+            let mut terminal = ratatui::init();
+            let prev_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                let _ = crossterm::execute!(
+                    std::io::stdout(),
+                    crossterm::event::DisableBracketedPaste,
+                    crossterm::event::DisableMouseCapture,
+                );
+                prev_hook(info);
+            }));
+            let _ = crossterm::execute!(
+                std::io::stdout(),
+                crossterm::event::EnableMouseCapture,
+                crossterm::event::EnableBracketedPaste,
+            );
+            let result = app.run(&mut terminal);
+            let _ = crossterm::execute!(
+                std::io::stdout(),
+                crossterm::event::DisableBracketedPaste,
+                crossterm::event::DisableMouseCapture,
+            );
+            ratatui::restore();
+            result
+        }
+    }
+}
