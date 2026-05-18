@@ -116,3 +116,37 @@ pub fn resolve(task: &Task) -> Endpoints {
         }
     }
 }
+
+pub fn build_args(task: &Task, dry_run: bool) -> Vec<String> {
+    assemble(task, &resolve(task), dry_run)
+}
+
+pub fn prepare_dest(task: &Task) -> std::io::Result<()> {
+    if !matches!(task.action, Action::Snapshot) {
+        return Ok(());
+    }
+    let ep = resolve(task);
+    if is_remote_path(&ep.dst) {
+        return Ok(());
+    }
+    if let Some(parent) = std::path::Path::new(&ep.dst).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+fn assemble(task: &Task, ep: &Endpoints, dry_run: bool) -> Vec<String> {
+    let f = &task.flags;
+    let mut args: Vec<String> = Vec::new();
+
+    if f.archive {
+        args.push("-a".into());
+    }
+    if f.hardlinks {
+        args.push("-H".into());
+    }
+    if f.acls {
+        args.push("-A".into());
+    }
+    if f.xattrs {
+        args.push("-X".into());
