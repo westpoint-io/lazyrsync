@@ -74,3 +74,45 @@ pub fn snapshot_info(task: &Task) -> Option<SnapshotInfo> {
     let newest_unix = (latest > 0)
         .then(|| std::fs::metadata(format!("{root}/{latest}")).ok())
         .flatten()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64);
+    Some(SnapshotInfo {
+        count: nums.len(),
+        latest,
+        next: latest + 1,
+        newest_unix,
+    })
+}
+
+pub fn next_snapshot_n(root: &str) -> u32 {
+    let mut max = 0;
+    if let Ok(rd) = std::fs::read_dir(root) {
+        for entry in rd.flatten() {
+            if let Ok(n) = entry.file_name().to_string_lossy().parse::<u32>() {
+                max = max.max(n);
+            }
+        }
+    }
+    max + 1
+}
+
+pub fn resolve(task: &Task) -> Endpoints {
+    match task.action {
+        Action::Sync => Endpoints {
+            src: expand_local(&task.source),
+            dst: expand_local(&task.dest),
+            link_dest: None,
+        },
+        Action::Snapshot => {
+            let root = expand_local(&task.dest);
+            let root = root.trim_end_matches('/').to_string();
+            let n = next_snapshot_n(&root);
+            Endpoints {
+                src: expand_local(&task.source),
+                dst: format!("{root}/{n}"),
+                link_dest: (n > 1).then(|| format!("{root}/{}", n - 1)),
+            }
+        }
+    }
+}
