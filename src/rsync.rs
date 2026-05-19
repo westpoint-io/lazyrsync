@@ -150,3 +150,44 @@ fn assemble(task: &Task, ep: &Endpoints, dry_run: bool) -> Vec<String> {
     }
     if f.xattrs {
         args.push("-X".into());
+    }
+    if f.compress {
+        args.push("-z".into());
+    }
+    if f.verbose {
+        args.push("-v".into());
+    }
+    if f.human && !dry_run {
+        args.push("-h".into());
+    }
+    if f.update {
+        args.push("-u".into());
+    }
+    if f.checksum {
+        args.push("-c".into());
+    }
+
+    if f.delete {
+        args.push("--delete".into());
+    }
+    if f.delete_excluded {
+        args.push("--delete-excluded".into());
+    }
+    if f.backup {
+        args.push("--backup".into());
+    }
+    if f.partial {
+        args.push("--partial".into());
+    }
+    if f.size_only {
+        args.push("--size-only".into());
+    }
+    if f.existing {
+        args.push("--existing".into());
+    }
+    if f.ignore_existing {
+        args.push("--ignore-existing".into());
+    }
+    if f.bwlimit_kbps > 0 {
+        args.push(format!("--bwlimit={}", f.bwlimit_kbps));
+    }
