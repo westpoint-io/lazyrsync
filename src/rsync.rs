@@ -191,3 +191,38 @@ fn assemble(task: &Task, ep: &Endpoints, dry_run: bool) -> Vec<String> {
     if f.bwlimit_kbps > 0 {
         args.push(format!("--bwlimit={}", f.bwlimit_kbps));
     }
+
+    if f.progress {
+        args.push("--info=progress2".into());
+    }
+
+    if let Some(link) = &ep.link_dest {
+        args.push(format!("--link-dest={link}"));
+    }
+
+    if dry_run {
+        args.push("-n".into());
+        args.push("--itemize-changes".into());
+        args.push("--stats".into());
+    }
+
+    for rule in &task.filters.filter {
+        args.push(format!("--filter={rule}"));
+    }
+    for inc in &task.filters.includes {
+        args.push(format!("--include={inc}"));
+    }
+    if !task.filters.include_from.is_empty() {
+        args.push(format!(
+            "--include-from={}",
+            expand_local(&task.filters.include_from)
+        ));
+    }
+    for exc in &task.filters.excludes {
+        args.push(format!("--exclude={exc}"));
+    }
+    if !task.filters.exclude_from.is_empty() {
+        args.push(format!(
+            "--exclude-from={}",
+            expand_local(&task.filters.exclude_from)
+        ));
