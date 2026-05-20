@@ -226,3 +226,41 @@ fn assemble(task: &Task, ep: &Endpoints, dry_run: bool) -> Vec<String> {
             "--exclude-from={}",
             expand_local(&task.filters.exclude_from)
         ));
+    }
+    if !task.filters.files_from.is_empty() {
+        args.push(format!(
+            "--files-from={}",
+            expand_local(&task.filters.files_from)
+        ));
+    }
+
+    if let Some(rsh) = build_rsh(task, ep) {
+        args.push(format!("--rsh={rsh}"));
+    }
+
+    if !task.advanced.raw_args.trim().is_empty() {
+        args.extend(split_args(&task.advanced.raw_args));
+    }
+
+    args.push("--".into());
+    args.push(ep.src.clone());
+    args.push(ep.dst.clone());
+
+    args
+}
+
+fn build_rsh(task: &Task, ep: &Endpoints) -> Option<String> {
+    let is_remote = is_remote_path(&ep.src) || is_remote_path(&ep.dst);
+    if !is_remote {
+        return None;
+    }
+    let ssh = &task.ssh;
+    let mut parts = vec![
+        "ssh".to_string(),
+        "-o".to_string(),
+        "BatchMode=yes".to_string(),
+    ];
+    if ssh.port != 22 {
+        parts.push(format!("-p {}", ssh.port));
+    }
+    if !ssh.keyfile.is_empty() {
