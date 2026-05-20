@@ -264,3 +264,41 @@ fn build_rsh(task: &Task, ep: &Endpoints) -> Option<String> {
         parts.push(format!("-p {}", ssh.port));
     }
     if !ssh.keyfile.is_empty() {
+        parts.push(format!("-i {}", ssh.keyfile));
+    }
+    if !ssh.extra.trim().is_empty() {
+        parts.push(ssh.extra.trim().to_string());
+    }
+    Some(parts.join(" "))
+}
+
+pub fn resolved_command(task: &Task, dry_run: bool) -> String {
+    format!("rsync {}", build_args(task, dry_run).join(" "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::profile::{Action, Task};
+
+    #[test]
+    fn default_sync_is_safe_archive() {
+        let p = Task::new("t", "/src/", "/dst/");
+        let args = build_args(&p, false);
+        assert!(args.contains(&"-a".to_string()));
+        assert!(args.contains(&"-z".to_string()));
+        assert!(args.contains(&"--info=progress2".to_string()));
+        assert_eq!(args[args.len() - 2], "/src/");
+        assert_eq!(args[args.len() - 1], "/dst/");
+        assert!(!args.contains(&"--delete".to_string()));
+    }
+
+    #[test]
+    fn filter_flags_all_emit_before_path_guard() {
+        let mut p = Task::new("t", "/src/", "/dst/");
+        p.filters.includes = vec!["*.txt".into()];
+        p.filters.excludes = vec!["*.log".into()];
+        p.filters.filter = vec!["- .git".into()];
+        p.filters.include_from = "/inc.txt".into();
+        p.filters.exclude_from = "/exc.txt".into();
+        p.filters.files_from = "/files.txt".into();
