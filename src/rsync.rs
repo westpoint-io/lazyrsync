@@ -302,3 +302,37 @@ mod tests {
         p.filters.include_from = "/inc.txt".into();
         p.filters.exclude_from = "/exc.txt".into();
         p.filters.files_from = "/files.txt".into();
+        let args = build_args(&p, false);
+        for expected in [
+            "--filter=- .git",
+            "--include=*.txt",
+            "--include-from=/inc.txt",
+            "--exclude=*.log",
+            "--exclude-from=/exc.txt",
+            "--files-from=/files.txt",
+        ] {
+            assert!(args.contains(&expected.to_string()), "missing {expected}");
+        }
+        let pos = |s: &str| args.iter().position(|a| a == s).unwrap();
+        assert!(pos("--filter=- .git") < pos("--include=*.txt"));
+        assert!(pos("--include=*.txt") < pos("--exclude=*.log"));
+        assert_eq!(args[args.len() - 3], "--");
+    }
+
+    #[test]
+    fn paths_are_guarded_by_end_of_options() {
+        let p = Task::new("t", "-n", "/dst/");
+        let args = build_args(&p, false);
+        assert_eq!(args[args.len() - 3], "--");
+        assert_eq!(args[args.len() - 2], "-n");
+        assert_eq!(args[args.len() - 1], "/dst/");
+    }
+
+    #[test]
+    fn raw_args_respects_quotes() {
+        let mut p = Task::new("t", "/src/", "/dst/");
+        p.advanced.raw_args = "--rsync-path='/opt/my rsync/rsync' --stats".into();
+        let args = build_args(&p, false);
+        assert!(args.contains(&"--rsync-path=/opt/my rsync/rsync".to_string()));
+        assert!(args.contains(&"--stats".to_string()));
+    }
