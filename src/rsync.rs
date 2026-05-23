@@ -336,3 +336,45 @@ mod tests {
         assert!(args.contains(&"--rsync-path=/opt/my rsync/rsync".to_string()));
         assert!(args.contains(&"--stats".to_string()));
     }
+
+    #[test]
+    fn split_args_handles_quotes_and_whitespace() {
+        assert_eq!(split_args("a  b\tc"), vec!["a", "b", "c"]);
+        assert_eq!(split_args("\"a b\" c"), vec!["a b", "c"]);
+        assert_eq!(split_args("--x='y z'"), vec!["--x=y z"]);
+        assert!(split_args("   ").is_empty());
+    }
+
+    #[test]
+    fn prepare_dest_creates_snapshot_root() {
+        let base = std::env::temp_dir().join(format!("lr-prep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("snaps");
+        let mut p = Task::new("t", "/src/", root.to_str().unwrap());
+        p.action = Action::Snapshot;
+        prepare_dest(&p).unwrap();
+        assert!(root.is_dir(), "snapshot root should be created");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn filter_file_paths_expand_tilde() {
+        std::env::set_var("HOME", "/home/tester");
+        let mut p = Task::new("t", "/src/", "/dst/");
+        p.filters.exclude_from = "~/exclude.txt".into();
+        p.filters.include_from = "~/inc.txt".into();
+        p.filters.files_from = "~/files.txt".into();
+        let args = build_args(&p, false);
+        assert!(args.contains(&"--exclude-from=/home/tester/exclude.txt".to_string()));
+        assert!(args.contains(&"--include-from=/home/tester/inc.txt".to_string()));
+        assert!(args.contains(&"--files-from=/home/tester/files.txt".to_string()));
+    }
+
+    #[test]
+    fn dry_run_adds_n_itemize_and_stats() {
+        let p = Task::new("t", "/src/", "/dst/");
+        let args = build_args(&p, true);
+        assert!(args.contains(&"-n".to_string()));
+        assert!(args.contains(&"--itemize-changes".to_string()));
+        assert!(args.contains(&"--stats".to_string()));
+    }
