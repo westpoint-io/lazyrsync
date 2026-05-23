@@ -378,3 +378,40 @@ mod tests {
         assert!(args.contains(&"--itemize-changes".to_string()));
         assert!(args.contains(&"--stats".to_string()));
     }
+
+    #[test]
+    fn inline_remote_dest_passes_through() {
+        let p = Task::new("t", "/src/", "me@vps:/backup/");
+        let args = build_args(&p, false);
+        assert_eq!(args[args.len() - 2], "/src/");
+        assert_eq!(args[args.len() - 1], "me@vps:/backup/");
+    }
+
+    #[test]
+    fn inline_remote_source_passes_through() {
+        let p = Task::new("t", "me@vps:/data/", "/local/");
+        let args = build_args(&p, false);
+        assert_eq!(args[args.len() - 2], "me@vps:/data/");
+        assert_eq!(args[args.len() - 1], "/local/");
+    }
+
+    #[test]
+    fn snapshot_builds_numbered_dest_and_link_dest() {
+        let base = std::env::temp_dir().join(format!("lr-snap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("1")).unwrap();
+        let mut p = Task::new("t", "/src/", base.to_str().unwrap());
+        p.action = Action::Snapshot;
+        let ep = resolve(&p);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(ep.dst, format!("{}/2", base.display()));
+        assert_eq!(ep.link_dest, Some(format!("{}/1", base.display())));
+    }
+
+    #[test]
+    fn preserve_flags_apply_on_top_of_archive() {
+        let mut p = Task::new("t", "/src/", "/dst/");
+        p.flags.hardlinks = true;
+        let args = build_args(&p, false);
+        assert!(args.contains(&"-a".to_string()));
+        assert!(args.contains(&"-H".to_string()));
