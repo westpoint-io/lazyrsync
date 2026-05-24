@@ -415,3 +415,41 @@ mod tests {
         let args = build_args(&p, false);
         assert!(args.contains(&"-a".to_string()));
         assert!(args.contains(&"-H".to_string()));
+
+        p.flags.archive = false;
+        let args = build_args(&p, false);
+        assert!(!args.contains(&"-a".to_string()));
+        assert!(args.contains(&"-H".to_string()));
+    }
+
+    #[test]
+    fn remote_always_builds_rsh_with_batchmode() {
+        let p = Task::new("t", "/src/", "user@host:/dst/");
+        assert!(build_args(&p, false)
+            .iter()
+            .any(|a| a == "--rsh=ssh -o BatchMode=yes"));
+        let mut q = Task::new("t", "/src/", "user@host:/dst/");
+        q.ssh.port = 2222;
+        assert!(build_args(&q, false)
+            .iter()
+            .any(|a| a == "--rsh=ssh -o BatchMode=yes -p 2222"));
+    }
+
+    #[test]
+    fn local_dest_never_builds_rsh() {
+        let mut p = Task::new("t", "/src/", "/dst/");
+        p.ssh.port = 2222;
+        let args = build_args(&p, false);
+        assert!(!args.iter().any(|a| a.starts_with("--rsh")));
+    }
+
+    #[test]
+    fn bwlimit_only_when_set() {
+        let mut p = Task::new("t", "/src/", "/dst/");
+        assert!(!build_args(&p, false)
+            .iter()
+            .any(|a| a.starts_with("--bwlimit")));
+        p.flags.bwlimit_kbps = 5000;
+        assert!(build_args(&p, false).iter().any(|a| a == "--bwlimit=5000"));
+    }
+}
