@@ -132,3 +132,52 @@ impl Default for Flags {
         }
     }
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Filters {
+    pub excludes: Vec<String>,
+    pub includes: Vec<String>,
+    pub exclude_from: String,
+    #[serde(default)]
+    pub include_from: String,
+    #[serde(default)]
+    pub files_from: String,
+    #[serde(default)]
+    pub filter: Vec<String>,
+}
+
+impl Filters {
+    pub fn is_empty(&self) -> bool {
+        self.excludes.is_empty()
+            && self.includes.is_empty()
+            && self.filter.is_empty()
+            && self.exclude_from.is_empty()
+            && self.include_from.is_empty()
+            && self.files_from.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Ssh {
+    pub port: u16,
+    pub keyfile: String,
+    pub extra: String,
+}
+
+impl Default for Ssh {
+    fn default() -> Self {
+        Self {
+            port: 22,
+            keyfile: String::new(),
+            extra: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Advanced {
+    pub raw_args: String,
+}
