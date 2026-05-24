@@ -90,3 +90,45 @@ pub struct Flags {
     pub verbose: bool,
     pub human: bool,
     pub progress: bool,
+
+    pub delete: bool,
+    pub delete_excluded: bool,
+    pub backup: bool,
+
+    pub update: bool,
+    pub checksum: bool,
+    pub partial: bool,
+    pub size_only: bool,
+    pub existing: bool,
+    pub ignore_existing: bool,
+    pub bwlimit_kbps: u32,
+
+    pub hardlinks: bool,
+    pub acls: bool,
+    pub xattrs: bool,
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self {
+            archive: true,
+            compress: true,
+            verbose: true,
+            human: true,
+            progress: true,
+            delete: false,
+            delete_excluded: false,
+            backup: false,
+            update: false,
+            checksum: false,
+            partial: true,
+            size_only: false,
+            existing: false,
+            ignore_existing: false,
+            bwlimit_kbps: 0,
+            hardlinks: false,
+            acls: false,
+            xattrs: false,
+        }
+    }
+}
