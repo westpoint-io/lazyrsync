@@ -181,3 +181,44 @@ impl Default for Ssh {
 pub struct Advanced {
     pub raw_args: String,
 }
+
+impl Profile {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: String::new(),
+            created: None,
+            tasks: Vec::new(),
+        }
+    }
+
+    pub fn ensure_ids(&mut self) {
+        let mut used: HashSet<String> = self
+            .tasks
+            .iter()
+            .map(|t| t.id.clone())
+            .filter(|s| !s.is_empty())
+            .collect();
+        for t in &mut self.tasks {
+            if !t.id.is_empty() {
+                continue;
+            }
+            let base = t.candidate_id();
+            let mut cand = base.clone();
+            let mut n = 2;
+            while used.contains(&cand) {
+                cand = format!("{base}-{n}");
+                n += 1;
+            }
+            used.insert(cand.clone());
+            t.id = cand;
+        }
+    }
+
+    pub fn sort_tasks_by_recency(&mut self) {
+        if self.tasks.len() < 2 {
+            return;
+        }
+        self.tasks[1..].sort_by(|a, b| b.created.cmp(&a.created));
+    }
+}
