@@ -222,3 +222,54 @@ impl Profile {
         self.tasks[1..].sort_by(|a, b| b.created.cmp(&a.created));
     }
 }
+
+impl Task {
+    pub fn new(
+        label: impl Into<String>,
+        source: impl Into<String>,
+        dest: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: String::new(),
+            label: label.into(),
+            action: Action::Sync,
+            source: source.into(),
+            dest: dest.into(),
+            flags: Flags::default(),
+            filters: Filters::default(),
+            ssh: Ssh::default(),
+            advanced: Advanced::default(),
+            created: None,
+            last_files: None,
+        }
+    }
+
+    pub fn content_token(&self) -> String {
+        let mut h = DefaultHasher::new();
+        self.action.label().hash(&mut h);
+        self.source.trim().hash(&mut h);
+        self.dest.trim().hash(&mut h);
+        format!("{:04x}", h.finish() as u16)
+    }
+
+    pub fn candidate_id(&self) -> String {
+        format!("{}-{}", slugify(&self.label), self.content_token())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_name_different_action_gets_distinct_ids() {
+        let sync = Task::new("My Backup", "/src/", "/dst/");
+        let mut snap = Task::new("My Backup", "/src/", "/dst/");
+        snap.action = Action::Snapshot;
+        let mut p = Profile::new("p");
+        p.tasks = vec![sync, snap];
+        p.ensure_ids();
+        assert!(p.tasks[0].id.starts_with("my-backup-"));
+        assert!(p.tasks[1].id.starts_with("my-backup-"));
+        assert_ne!(p.tasks[0].id, p.tasks[1].id);
+    }
