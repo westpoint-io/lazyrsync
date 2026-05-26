@@ -273,3 +273,43 @@ mod tests {
         assert!(p.tasks[1].id.starts_with("my-backup-"));
         assert_ne!(p.tasks[0].id, p.tasks[1].id);
     }
+
+    #[test]
+    fn identical_tasks_fall_back_to_numeric_suffix() {
+        let t = Task::new("dup", "/a/", "/b/");
+        let mut p = Profile::new("p");
+        p.tasks = vec![t.clone(), t.clone()];
+        p.ensure_ids();
+        assert_ne!(p.tasks[0].id, p.tasks[1].id);
+        assert!(p.tasks[1].id.ends_with("-2"));
+    }
+
+    #[test]
+    fn existing_ids_are_preserved() {
+        let mut t = Task::new("x", "/a/", "/b/");
+        t.id = "custom-id".into();
+        let mut p = Profile::new("p");
+        p.tasks = vec![t];
+        p.ensure_ids();
+        assert_eq!(p.tasks[0].id, "custom-id");
+    }
+
+    #[test]
+    fn sort_pins_first_and_orders_rest_newest_first() {
+        let mk = |id: &str, created: i64| {
+            let mut t = Task::new(id, "/s/", "/d/");
+            t.created = Some(created);
+            t
+        };
+        let mut p = Profile::new("p");
+        p.tasks = vec![
+            mk("pinned", 100),
+            mk("old", 200),
+            mk("new", 900),
+            mk("mid", 500),
+        ];
+        p.sort_tasks_by_recency();
+        let ids: Vec<&str> = p.tasks.iter().map(|t| t.label.as_str()).collect();
+        assert_eq!(ids, vec!["pinned", "new", "mid", "old"]);
+    }
+}
