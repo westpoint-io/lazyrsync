@@ -46,3 +46,51 @@ struct StoredTask {
     #[serde(default)]
     dest: String,
     #[serde(default)]
+    remote: String,
+    #[serde(default)]
+    destinations: Vec<String>,
+    #[serde(default)]
+    flags: Flags,
+    #[serde(default)]
+    filters: Filters,
+    #[serde(default)]
+    ssh: Ssh,
+    #[serde(default)]
+    advanced: Advanced,
+    #[serde(default)]
+    created: Option<i64>,
+    #[serde(default)]
+    last_files: Option<u64>,
+}
+
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn fold_remote(
+    remote: &str,
+    source: String,
+    dest: String,
+    legacy_action: &str,
+) -> (String, String) {
+    let r = remote.trim();
+    if r.is_empty() {
+        (source, dest)
+    } else if legacy_action == "pull" {
+        (format!("{r}:{source}"), dest)
+    } else {
+        (source, format!("{r}:{dest}"))
+    }
+}
+
+impl From<StoredTask> for Task {
+    fn from(s: StoredTask) -> Self {
+        let legacy = s.action.as_deref().unwrap_or("");
+        let action = if legacy == "snapshot" {
+            Action::Snapshot
+        } else {
+            Action::Sync
+        };
