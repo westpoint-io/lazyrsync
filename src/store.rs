@@ -94,3 +94,55 @@ impl From<StoredTask> for Task {
         } else {
             Action::Sync
         };
+        let dest = if s.dest.is_empty() {
+            s.destinations.first().cloned().unwrap_or_default()
+        } else {
+            s.dest
+        };
+        let (source, dest) = fold_remote(&s.remote, s.source, dest, legacy);
+        Task {
+            id: s.id,
+            label: s.label,
+            action,
+            source,
+            dest,
+            flags: s.flags,
+            filters: s.filters,
+            ssh: s.ssh,
+            advanced: s.advanced,
+            created: s.created,
+            last_files: s.last_files,
+        }
+    }
+}
+
+impl From<StoredProfile> for Profile {
+    fn from(s: StoredProfile) -> Self {
+        let mut tasks: Vec<Task> = s.tasks.into_iter().map(Task::from).collect();
+        if tasks.is_empty() {
+            if let Some(source) = s.source {
+                tasks.push(Task {
+                    id: String::new(),
+                    label: s.name.clone(),
+                    action: Action::Sync,
+                    source,
+                    dest: s.destinations.first().cloned().unwrap_or_default(),
+                    flags: s.flags.unwrap_or_default(),
+                    filters: s.filters.unwrap_or_default(),
+                    ssh: s.ssh.unwrap_or_default(),
+                    advanced: s.advanced.unwrap_or_default(),
+                    created: None,
+                    last_files: None,
+                });
+            }
+        }
+        let mut p = Profile {
+            name: s.name,
+            description: s.description,
+            created: s.created,
+            tasks,
+        };
+        p.ensure_ids();
+        p
+    }
+}
