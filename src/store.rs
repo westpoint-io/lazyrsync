@@ -195,3 +195,49 @@ impl Settings {
         Ok(())
     }
 }
+
+pub struct Store {
+    pub profiles: Vec<Profile>,
+    global_path: PathBuf,
+}
+
+impl Store {
+    pub fn global_path() -> PathBuf {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let home = std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_default();
+                home.join(".config")
+            });
+        base.join("lazyrsync").join("profiles.toml")
+    }
+
+    pub fn load() -> Result<Self> {
+        let global_path = Self::global_path();
+        let mut profiles = read_file(&global_path)?;
+        let now = now_unix();
+        let mut backfilled = false;
+        for p in &mut profiles {
+            if p.created.is_none() {
+                p.created = Some(now);
+                backfilled = true;
+            }
+            for t in &mut p.tasks {
+                if t.created.is_none() {
+                    t.created = Some(now);
+                    backfilled = true;
+                }
+            }
+            p.sort_tasks_by_recency();
+        }
+        let store = Self {
+            profiles,
+            global_path,
+        };
+        if backfilled {
+            let _ = store.save();
+        }
+        Ok(store)
+    }
