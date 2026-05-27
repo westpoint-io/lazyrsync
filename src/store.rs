@@ -146,3 +146,52 @@ impl From<StoredProfile> for Profile {
         p
     }
 }
+
+fn config_dir() -> PathBuf {
+    Store::global_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    pub skip_delete_warning: bool,
+    pub hints: bool,
+    pub theme: crate::ui::ThemeSpec,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            skip_delete_warning: false,
+            hints: true,
+            theme: crate::ui::ThemeSpec::default(),
+        }
+    }
+}
+
+impl Settings {
+    fn path() -> PathBuf {
+        config_dir().join("settings.toml")
+    }
+
+    pub fn load() -> Self {
+        let path = Self::path();
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| toml::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let path = Self::path();
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+        }
+        let text = toml::to_string_pretty(self).context("serializing settings")?;
+        fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
+        Ok(())
+    }
+}
