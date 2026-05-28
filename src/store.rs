@@ -241,3 +241,47 @@ impl Store {
         }
         Ok(store)
     }
+
+    pub fn save(&self) -> Result<()> {
+        if let Some(dir) = self.global_path.parent() {
+            fs::create_dir_all(dir)
+                .with_context(|| format!("creating config dir {}", dir.display()))?;
+        }
+        let file = ProfileFile {
+            profiles: self.profiles.clone(),
+        };
+        let text = toml::to_string_pretty(&file).context("serializing profiles")?;
+        fs::write(&self.global_path, text)
+            .with_context(|| format!("writing {}", self.global_path.display()))?;
+        Ok(())
+    }
+}
+
+fn read_file(path: &Path) -> Result<Vec<Profile>> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let file: StoredFile =
+        toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(file.profiles.into_iter().map(Profile::from).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_round_trips_through_toml() {
+        let mut t = Task::new("data → nas", "/home/me/data/", "me@nas:/backup/data/");
+        t.flags.delete = true;
+        t.flags.bwlimit_kbps = 4000;
+        t.filters.excludes = vec!["*.tmp".into(), ".git/".into()];
+        t.ssh.port = 2222;
+        let mut p = Profile::new("backup");
+        p.description = "nightly".into();
+        p.tasks = vec![t];
+
+        let text = toml::to_string_pretty(&ProfileFile { profiles: vec![p] }).unwrap();
+        let back: StoredFile = toml::from_str(&text).unwrap();
+        let q: Profile = back.profiles.into_iter().next().unwrap().into();
