@@ -285,3 +285,59 @@ mod tests {
         let text = toml::to_string_pretty(&ProfileFile { profiles: vec![p] }).unwrap();
         let back: StoredFile = toml::from_str(&text).unwrap();
         let q: Profile = back.profiles.into_iter().next().unwrap().into();
+
+        assert_eq!(q.name, "backup");
+        assert_eq!(q.description, "nightly");
+        assert_eq!(q.tasks.len(), 1);
+        let task = &q.tasks[0];
+        assert_eq!(task.label, "data → nas");
+        assert_eq!(task.source, "/home/me/data/");
+        assert_eq!(task.dest, "me@nas:/backup/data/");
+        assert!(task.flags.delete);
+        assert_eq!(task.flags.bwlimit_kbps, 4000);
+        assert_eq!(task.filters.excludes, vec!["*.tmp", ".git/"]);
+        assert_eq!(task.ssh.port, 2222);
+    }
+
+    #[test]
+    fn legacy_flat_profile_keeps_host_inline() {
+        let legacy = r#"
+[[profile]]
+name = "old-backup"
+source = "/home/me/data/"
+destinations = ["me@nas:/backup/"]
+
+[profile.flags]
+delete = true
+"#;
+        let parsed: StoredFile = toml::from_str(legacy).unwrap();
+        let p: Profile = parsed.profiles.into_iter().next().unwrap().into();
+        assert_eq!(p.name, "old-backup");
+        assert_eq!(p.tasks.len(), 1, "legacy profile should fold into one task");
+        assert_eq!(p.tasks[0].label, "old-backup");
+        assert_eq!(p.tasks[0].source, "/home/me/data/");
+        assert_eq!(
+            p.tasks[0].dest, "me@nas:/backup/",
+            "host kept inline in dest"
+        );
+        assert!(p.tasks[0].flags.delete);
+    }
+
+    #[test]
+    fn legacy_push_folds_remote_into_dest() {
+        let legacy = r#"
+[[profile]]
+name = "p"
+[[profile.task]]
+label = "t"
+action = "push"
+source = "/home/me/data/"
+dest = "/backup/"
+remote = "me@nas"
+"#;
+        let parsed: StoredFile = toml::from_str(legacy).unwrap();
+        let p: Profile = parsed.profiles.into_iter().next().unwrap().into();
+        assert_eq!(p.tasks[0].source, "/home/me/data/");
+        assert_eq!(p.tasks[0].dest, "me@nas:/backup/");
+        assert_eq!(p.tasks[0].action, Action::Sync);
+    }
