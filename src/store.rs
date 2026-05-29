@@ -341,3 +341,45 @@ remote = "me@nas"
         assert_eq!(p.tasks[0].dest, "me@nas:/backup/");
         assert_eq!(p.tasks[0].action, Action::Sync);
     }
+
+    #[test]
+    fn legacy_pull_folds_remote_into_source() {
+        let legacy = r#"
+[[profile]]
+name = "p"
+[[profile.task]]
+label = "t"
+action = "pull"
+source = "/remote/data/"
+dest = "/home/me/local/"
+remote = "me@nas"
+"#;
+        let parsed: StoredFile = toml::from_str(legacy).unwrap();
+        let p: Profile = parsed.profiles.into_iter().next().unwrap().into();
+        assert_eq!(p.tasks[0].source, "me@nas:/remote/data/");
+        assert_eq!(p.tasks[0].dest, "/home/me/local/");
+        assert_eq!(p.tasks[0].action, Action::Sync);
+    }
+
+    #[test]
+    fn nested_task_with_destinations_migrates() {
+        let toml_str = r#"
+[[profile]]
+name = "p"
+[[profile.task]]
+label = "t"
+source = "/home/me/data/"
+destinations = ["/mnt/usb/"]
+"#;
+        let parsed: StoredFile = toml::from_str(toml_str).unwrap();
+        let p: Profile = parsed.profiles.into_iter().next().unwrap().into();
+        assert_eq!(p.tasks[0].dest, "/mnt/usb/");
+        assert_eq!(p.tasks[0].action, Action::Sync);
+    }
+
+    #[test]
+    fn missing_file_is_empty_not_error() {
+        let path = Path::new("/nonexistent/lazyrsync/does-not-exist.toml");
+        assert!(read_file(path).unwrap().is_empty());
+    }
+}
