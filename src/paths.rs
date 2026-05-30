@@ -58,3 +58,28 @@ pub fn path_hits(buffer: &str) -> Vec<String> {
     hits.sort();
     hits
 }
+
+pub fn complete_path(buffer: &str) -> String {
+    let hits = path_hits(buffer);
+    match hits.len() {
+        0 => buffer.to_string(),
+        1 => hits[0].clone(),
+        _ => {
+            let first = &hits[0];
+            let mut len = first.len();
+            for h in &hits[1..] {
+                len = first
+                    .chars()
+                    .zip(h.chars())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+                    .min(len);
+            }
+            first.chars().take(len).collect()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::complete_path;
