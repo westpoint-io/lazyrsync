@@ -83,3 +83,30 @@ pub fn complete_path(buffer: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::complete_path;
+
+    #[test]
+    fn smart_case_lowercase_query_is_insensitive() {
+        let base = std::env::temp_dir().join(format!("lr-comp-i-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("Archive")).unwrap();
+        let got = complete_path(&format!("{}/arc", base.display()));
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(got, format!("{}/Archive/", base.display()));
+    }
+
+    #[test]
+    fn smart_case_uppercase_query_is_sensitive() {
+        let base = std::env::temp_dir().join(format!("lr-comp-s-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("archive")).unwrap();
+        let typed = format!("{}/Arc", base.display());
+        let got = complete_path(&typed);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(got, typed);
+    }
+
+    #[test]
+    fn remote_paths_are_left_untouched() {
+        assert_eq!(complete_path("me@vps:/backup/da"), "me@vps:/backup/da");
+    }
+}
