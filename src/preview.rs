@@ -119,3 +119,44 @@ pub fn spawn(task: &Task) -> PreviewHandle {
         child: child_slot,
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChangeKind {
+    Added,
+    Modified,
+    Deleted,
+}
+
+#[derive(Debug, Clone)]
+pub struct Change {
+    pub kind: ChangeKind,
+    pub path: Box<str>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Stats {
+    pub files: u64,
+    pub dirs: u64,
+    pub created: u64,
+    pub deleted: u64,
+    pub transferred: u64,
+    pub total_size: u64,
+    pub transferred_size: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct Preview {
+    pub changes: Arc<Vec<Change>>,
+    pub stats: Stats,
+}
+
+pub fn parse_itemized(output: &str) -> Vec<Change> {
+    let mut changes = Vec::new();
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("*deleting") {
+            changes.push(Change {
+                kind: ChangeKind::Deleted,
+                path: rest.trim().into(),
+            });
+            continue;
+        }
