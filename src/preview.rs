@@ -78,3 +78,44 @@ pub fn spawn(task: &Task) -> PreviewHandle {
             }
             None => {
                 if let Some(c) = parse_itemized(&seg).into_iter().next() {
+                    let _ = tx.send(PreviewMsg::Found(c.clone()));
+                    changes.push(c);
+                }
+                tail.push_back(seg);
+                if tail.len() > TAIL {
+                    tail.pop_front();
+                }
+            }
+        });
+        let err = err_thread.join().unwrap_or_default();
+
+        let code = match slot.lock().unwrap().take() {
+            Some(mut child) => child.wait().ok().and_then(|s| s.code()).unwrap_or(-1),
+            None => -1,
+        };
+        if code != 0 && code != 24 {
+            let msg = err
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .unwrap_or("rsync failed");
+            let _ = tx.send(PreviewMsg::Failed(
+                code,
+                format!("rsync exited {code}: {msg}"),
+            ));
+            return;
+        }
+
+        let trailer: Vec<&str> = tail.iter().map(String::as_str).collect();
+        let stats = parse_stats(&trailer.join("\n"));
+        let _ = tx.send(PreviewMsg::Done(Box::new(Preview {
+            changes: Arc::new(changes),
+            stats,
+        })));
+    });
+
+    PreviewHandle {
+        rx,
+        child: child_slot,
+    }
+}
