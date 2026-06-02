@@ -160,3 +160,44 @@ pub fn parse_itemized(output: &str) -> Vec<Change> {
             });
             continue;
         }
+
+        let bytes = line.as_bytes();
+        if bytes.len() < 12 || bytes[11] != b' ' {
+            continue;
+        }
+        let update = bytes[0] as char;
+
+        if !matches!(update, '<' | '>' | 'c' | 'h') {
+            continue;
+        }
+        let flags = &line[2..11];
+        let path = line[12..].trim();
+        if path.is_empty() {
+            continue;
+        }
+        let path: Box<str> = path.into();
+        let kind = if flags.chars().all(|c| c == '+') {
+            ChangeKind::Added
+        } else {
+            ChangeKind::Modified
+        };
+        changes.push(Change { kind, path });
+    }
+    changes
+}
+
+fn stat_num(output: &str, prefix: &str) -> u64 {
+    for line in output.lines() {
+        if let Some(rest) = line.trim().strip_prefix(prefix) {
+            let digits: String = rest
+                .chars()
+                .take_while(|c| *c != '(')
+                .filter(|c| c.is_ascii_digit())
+                .collect();
+            if let Ok(n) = digits.parse() {
+                return n;
+            }
+        }
+    }
+    0
+}
