@@ -242,3 +242,40 @@ cd+++++++++ subdir/
 >f.st...... changed.txt
 *deleting   will_be_deleted.txt
 .d..t...... ./
+
+Number of files: 5 (reg: 4, dir: 1)
+Number of created files: 3
+Number of deleted files: 1
+Number of regular files transferred: 2
+Total file size: 1,234 bytes
+Total transferred file size: 567 bytes
+";
+
+    #[test]
+    fn classifies_added_modified_deleted() {
+        let changes = parse_itemized(SAMPLE);
+        let added: Vec<_> = changes
+            .iter()
+            .filter(|c| c.kind == ChangeKind::Added)
+            .collect();
+        let modified: Vec<_> = changes
+            .iter()
+            .filter(|c| c.kind == ChangeKind::Modified)
+            .collect();
+        let deleted: Vec<_> = changes
+            .iter()
+            .filter(|c| c.kind == ChangeKind::Deleted)
+            .collect();
+
+        assert_eq!(added.len(), 3, "added: {added:?}");
+        assert_eq!(modified.len(), 2, "modified: {modified:?}");
+        assert_eq!(deleted.len(), 1, "deleted: {deleted:?}");
+        assert_eq!(&*deleted[0].path, "will_be_deleted.txt");
+    }
+
+    #[test]
+    fn ignores_headers_and_no_transfer_lines() {
+        let changes = parse_itemized(SAMPLE);
+        assert!(!changes.iter().any(|c| c.path.contains("incremental")));
+        assert!(!changes.iter().any(|c| &*c.path == "./"));
+    }
