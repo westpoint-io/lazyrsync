@@ -279,3 +279,43 @@ Total transferred file size: 567 bytes
         assert!(!changes.iter().any(|c| c.path.contains("incremental")));
         assert!(!changes.iter().any(|c| &*c.path == "./"));
     }
+
+    #[test]
+    fn parses_stats_block() {
+        let s = parse_stats(SAMPLE);
+        assert_eq!(s.files, 5);
+        assert_eq!(s.dirs, 1);
+        assert_eq!(s.created, 3);
+        assert_eq!(s.deleted, 1);
+        assert_eq!(s.transferred, 2);
+        assert_eq!(s.total_size, 1234);
+        assert_eq!(s.transferred_size, 567);
+    }
+
+    #[test]
+    fn no_stats_line_yields_zero() {
+        assert_eq!(parse_stats(">f+++++++++ x.txt\n").transferred_size, 0);
+    }
+
+    #[test]
+    fn run_against_real_rsync() {
+        use std::fs;
+        if std::process::Command::new("rsync")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            eprintln!("rsync not installed — skipping live preview test");
+            return;
+        }
+        let base = std::env::temp_dir().join(format!("lazyrsync-it-{}", std::process::id()));
+        let src = base.join("src");
+        let dst = base.join("dst");
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(src.join("subdir")).unwrap();
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(src.join("new_file.txt"), "hello").unwrap();
+        fs::write(src.join("changed.txt"), "new longer").unwrap();
+        fs::write(dst.join("changed.txt"), "old").unwrap();
+        fs::write(src.join("subdir/nested.txt"), "x").unwrap();
+        fs::write(dst.join("will_be_deleted.txt"), "stale").unwrap();
