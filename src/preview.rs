@@ -201,3 +201,44 @@ fn stat_num(output: &str, prefix: &str) -> u64 {
     }
     0
 }
+
+fn dir_count(output: &str) -> u64 {
+    for line in output.lines() {
+        if let Some(rest) = line.trim().strip_prefix("Number of files:") {
+            if let Some(idx) = rest.find("dir:") {
+                let digits: String = rest[idx + 4..]
+                    .chars()
+                    .take_while(|c| *c != ')')
+                    .filter(|c| c.is_ascii_digit())
+                    .collect();
+                return digits.parse().unwrap_or(0);
+            }
+        }
+    }
+    0
+}
+
+pub fn parse_stats(output: &str) -> Stats {
+    Stats {
+        files: stat_num(output, "Number of files:"),
+        dirs: dir_count(output),
+        created: stat_num(output, "Number of created files:"),
+        deleted: stat_num(output, "Number of deleted files:"),
+        transferred: stat_num(output, "Number of regular files transferred:"),
+        total_size: stat_num(output, "Total file size:"),
+        transferred_size: stat_num(output, "Total transferred file size:"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE: &str = "sending incremental file list
+>f+++++++++ new_file.txt
+cd+++++++++ subdir/
+>f+++++++++ subdir/nested.txt
+>f..t...... unchanged_time_only.txt
+>f.st...... changed.txt
+*deleting   will_be_deleted.txt
+.d..t...... ./
