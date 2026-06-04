@@ -319,3 +319,42 @@ Total transferred file size: 567 bytes
         fs::write(dst.join("changed.txt"), "old").unwrap();
         fs::write(src.join("subdir/nested.txt"), "x").unwrap();
         fs::write(dst.join("will_be_deleted.txt"), "stale").unwrap();
+
+        let mut p = Task::new(
+            "it",
+            format!("{}/", src.display()),
+            format!("{}/", dst.display()),
+        );
+        p.flags.delete = true;
+
+        let handle = spawn(&p);
+        let mut found = 0usize;
+        let pv = loop {
+            match handle.rx.recv().expect("preview channel") {
+                PreviewMsg::Progress(_) => continue,
+                PreviewMsg::Found(_) => found += 1,
+                PreviewMsg::Done(pv) => break *pv,
+                PreviewMsg::Failed(_, e) => panic!("preview failed: {e}"),
+            }
+        };
+        assert!(
+            found >= 4,
+            "expected streamed Found messages for the changes, got {found}"
+        );
+        let count = |k: ChangeKind| pv.changes.iter().filter(|c| c.kind == k).count();
+        let added = count(ChangeKind::Added);
+        let modified = count(ChangeKind::Modified);
+        let deleted = count(ChangeKind::Deleted);
+        let _ = fs::remove_dir_all(&base);
+
+        assert_eq!(
+            added, 3,
+            "expected 3 added (new_file, subdir/, nested), changes: {:?}",
+            pv.changes
+        );
+        assert_eq!(modified, 1, "expected 1 modified (changed.txt)");
+        assert_eq!(deleted, 1, "expected 1 deleted (will_be_deleted.txt)");
+
+        assert_eq!(pv.stats.transferred_size, 16);
+    }
+}
