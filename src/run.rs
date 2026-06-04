@@ -17,3 +17,27 @@ pub struct Progress {
     pub files_final: bool,
     pub bytes: u64,
 }
+
+impl Progress {
+    pub fn effective_percent(&self) -> u8 {
+        if self.percent > 0 || !self.files_final || self.files_total == 0 {
+            self.percent
+        } else {
+            (self.files_done * 100 / self.files_total).min(100) as u8
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RunMsg {
+    Progress(Progress),
+
+    Line(String),
+    Done { code: i32 },
+    Failed(String),
+}
+
+pub struct RunHandle {
+    pub rx: Receiver<RunMsg>,
+    child: Arc<Mutex<Option<Child>>>,
+}
