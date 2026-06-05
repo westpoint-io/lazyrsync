@@ -41,3 +41,32 @@ pub struct RunHandle {
     pub rx: Receiver<RunMsg>,
     child: Arc<Mutex<Option<Child>>>,
 }
+
+impl RunHandle {
+    pub fn cancel(&self) {
+        if let Ok(mut slot) = self.child.lock() {
+            if let Some(child) = slot.as_mut() {
+                let _ = child.kill();
+            }
+        }
+    }
+}
+
+pub fn start(task: &Task) -> RunHandle {
+    let args = rsync::build_args(task, false);
+    let task = task.clone();
+    let (tx, rx) = mpsc::channel();
+    let child_slot: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+    let slot = child_slot.clone();
+
+    thread::spawn(move || {
+        if let Err(e) = rsync::prepare_dest(&task) {
+            let _ = tx.send(RunMsg::Failed(format!("could not create destination: {e}")));
+            return;
+        }
+        let mut child = match Command::new("rsync")
+            .args(&args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
