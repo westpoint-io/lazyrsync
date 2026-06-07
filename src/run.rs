@@ -115,3 +115,28 @@ pub fn start(task: &Task) -> RunHandle {
         child: child_slot,
     }
 }
+
+pub fn read_segments<R: Read>(reader: &mut BufReader<R>, mut on_seg: impl FnMut(String)) {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        match reader.read(&mut byte) {
+            Ok(0) => break,
+            Ok(_) => {
+                let b = byte[0];
+                if b == b'\n' || b == b'\r' {
+                    if !buf.is_empty() {
+                        on_seg(String::from_utf8_lossy(&buf).trim_end().to_string());
+                        buf.clear();
+                    }
+                } else {
+                    buf.push(b);
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    if !buf.is_empty() {
+        on_seg(String::from_utf8_lossy(&buf).trim_end().to_string());
+    }
+}
