@@ -91,3 +91,27 @@ pub fn start(task: &Task) -> RunHandle {
                 let _ = tx_err.send(RunMsg::Line(seg));
             });
         });
+
+        let mut reader = BufReader::new(stdout);
+        read_segments(&mut reader, |seg| {
+            let msg = match parse_progress(&seg) {
+                Some(p) => RunMsg::Progress(p),
+                None => RunMsg::Line(seg),
+            };
+            let _ = tx.send(msg);
+        });
+
+        let _ = stderr_thread.join();
+
+        let code = match slot.lock().unwrap().take() {
+            Some(mut child) => child.wait().ok().and_then(|s| s.code()).unwrap_or(-1),
+            None => -1,
+        };
+        let _ = tx.send(RunMsg::Done { code });
+    });
+
+    RunHandle {
+        rx,
+        child: child_slot,
+    }
+}
