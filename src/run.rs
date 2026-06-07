@@ -70,3 +70,24 @@ pub fn start(task: &Task) -> RunHandle {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(RunMsg::Failed(format!(
+                    "failed to launch rsync: {e} (is rsync installed?)"
+                )));
+                return;
+            }
+        };
+
+        let stdout = child.stdout.take().expect("piped stdout");
+        let stderr = child.stderr.take().expect("piped stderr");
+        *slot.lock().unwrap() = Some(child);
+
+        let tx_err = tx.clone();
+        let stderr_thread = thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            read_segments(&mut reader, |seg| {
+                let _ = tx_err.send(RunMsg::Line(seg));
+            });
+        });
