@@ -140,3 +140,30 @@ pub fn read_segments<R: Read>(reader: &mut BufReader<R>, mut on_seg: impl FnMut(
         on_seg(String::from_utf8_lossy(&buf).trim_end().to_string());
     }
 }
+
+pub fn parse_progress(line: &str) -> Option<Progress> {
+    if !line.contains('%') {
+        return None;
+    }
+    let toks: Vec<&str> = line.split_whitespace().collect();
+    let mut p = Progress::default();
+
+    if let Some(first) = toks.first() {
+        let digits: String = first.chars().filter(|c| c.is_ascii_digit()).collect();
+        p.bytes = digits.parse().unwrap_or(0);
+    }
+    for t in &toks {
+        if let Some(pct) = t.strip_suffix('%') {
+            if let Ok(v) = pct.parse::<u8>() {
+                p.percent = v;
+            }
+        } else if t.contains("B/s") {
+            p.speed = (*t).to_string();
+        } else if t.matches(':').count() == 2 {
+            p.eta = (*t).to_string();
+        }
+    }
+    for key in ["to-chk=", "ir-chk="] {
+        if let Some(idx) = line.find(key) {
+            let rest = &line[idx + key.len()..];
+            let nums: String = rest
