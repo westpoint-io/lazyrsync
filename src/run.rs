@@ -167,3 +167,25 @@ pub fn parse_progress(line: &str) -> Option<Progress> {
         if let Some(idx) = line.find(key) {
             let rest = &line[idx + key.len()..];
             let nums: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '/')
+                .collect();
+            if let Some((r, t)) = nums.split_once('/') {
+                let rem: u64 = r.parse().unwrap_or(0);
+                let tot: u64 = t.parse().unwrap_or(0);
+                p.files_total = tot;
+                p.files_done = tot.saturating_sub(rem);
+                p.files_final = key == "to-chk=";
+            }
+        }
+    }
+
+    if p.percent == 0 && p.speed.is_empty() {
+        return None;
+    }
+    Some(p)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
