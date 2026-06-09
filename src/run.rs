@@ -189,3 +189,30 @@ pub fn parse_progress(line: &str) -> Option<Progress> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_progress2_line() {
+        let p =
+            parse_progress("      1,234,567  45%    1.23MB/s    0:00:12 (xfr#3, to-chk=120/345)")
+                .expect("should parse");
+        assert_eq!(p.percent, 45);
+        assert_eq!(p.speed, "1.23MB/s");
+        assert_eq!(p.eta, "0:00:12");
+        assert_eq!(p.bytes, 1234567);
+        assert_eq!(p.files_total, 345);
+        assert_eq!(p.files_done, 345 - 120);
+    }
+
+    #[test]
+    fn ignores_non_progress_lines() {
+        assert!(parse_progress("sending incremental file list").is_none());
+        assert!(parse_progress("subdir/file.txt").is_none());
+        assert!(parse_progress("").is_none());
+    }
+
+    #[test]
+    fn compare_only_run_falls_back_to_file_check_percent() {
+        let p = parse_progress("  0  0%  0.00kB/s  0:00:00 (xfr#0, to-chk=120/345)").unwrap();
+        assert_eq!(p.percent, 0);
+        assert_eq!(p.effective_percent(), 65);
+    }
