@@ -216,3 +216,25 @@ mod tests {
         assert_eq!(p.percent, 0);
         assert_eq!(p.effective_percent(), 65);
     }
+
+    #[test]
+    fn ir_chk_growing_total_gives_no_fake_percent() {
+        let p = parse_progress("  0  0%  0.00kB/s  0:00:00 (xfr#0, ir-chk=1005/2564469)").unwrap();
+        assert!(!p.files_final);
+        assert_eq!(p.effective_percent(), 0);
+        assert_eq!(p.files_done, 2564469 - 1005);
+    }
+
+    #[test]
+    fn byte_percent_wins_when_transferring() {
+        let p = parse_progress("  1,234  45%  1.23MB/s  0:00:12 (xfr#3, to-chk=300/345)").unwrap();
+        assert_eq!(p.effective_percent(), 45);
+    }
+
+    #[test]
+    fn handles_ir_chk_variant() {
+        let p = parse_progress("100  50%  2MB/s  0:00:01 (xfr#1, ir-chk=10/20)").unwrap();
+        assert_eq!(p.files_total, 20);
+        assert_eq!(p.files_done, 10);
+    }
+}
