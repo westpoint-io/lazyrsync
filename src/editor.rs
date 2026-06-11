@@ -67,3 +67,71 @@ impl Section {
                 IgnoreExisting,
                 Hardlinks,
                 Acls,
+                Xattrs,
+            ],
+            Section::Filters => &[
+                Includes,
+                IncludeFrom,
+                Excludes,
+                ExcludeFrom,
+                Filter,
+                FilesFrom,
+            ],
+            Section::Ssh => &[SshPort, SshKey, SshExtra],
+            Section::Advanced => &[RawArgs],
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum F {
+    Name,
+    Source,
+    Dest,
+    Archive,
+    Compress,
+    Verbose,
+    Human,
+    Progress,
+    Delete,
+    DeleteExcluded,
+    Backup,
+    Update,
+    Checksum,
+    Partial,
+    SizeOnly,
+    Existing,
+    IgnoreExisting,
+    Excludes,
+    Includes,
+    ExcludeFrom,
+    IncludeFrom,
+    FilesFrom,
+    Filter,
+    Hardlinks,
+    Acls,
+    Xattrs,
+    SshPort,
+    SshKey,
+    SshExtra,
+    RawArgs,
+}
+
+enum Kind {
+    Bool,
+    Text,
+    Number,
+    List,
+}
+
+impl F {
+    fn short(self) -> &'static str {
+        use F::*;
+        match self {
+            Archive => "archive",
+            Compress => "compress",
+            Verbose => "verbose",
+            Human => "human",
+            Progress => "progress",
+            Delete => "delete",
+            DeleteExcluded => "del-excl",
