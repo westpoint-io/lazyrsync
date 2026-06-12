@@ -135,3 +135,72 @@ impl F {
             Progress => "progress",
             Delete => "delete",
             DeleteExcluded => "del-excl",
+            Backup => "backup",
+            Update => "update",
+            Checksum => "checksum",
+            Partial => "partial",
+            SizeOnly => "size-only",
+            Existing => "existing",
+            IgnoreExisting => "ign-exist",
+            Hardlinks => "hardlinks",
+            Acls => "acls",
+            Xattrs => "xattrs",
+            _ => "",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        use F::*;
+        match self {
+            Name => "Name",
+            Source => "Source",
+            Dest => "Destination",
+            Archive => "-a archive",
+            Compress => "-z compress",
+            Verbose => "-v verbose",
+            Human => "-h human",
+            Progress => "--info=progress2",
+            Delete => "--delete",
+            DeleteExcluded => "--delete-excluded",
+            Backup => "--backup",
+            Update => "-u update",
+            Checksum => "-c checksum",
+            Partial => "--partial",
+            SizeOnly => "--size-only",
+            Existing => "--existing",
+            IgnoreExisting => "--ignore-existing",
+            Excludes => "Excludes",
+            Includes => "Includes",
+            ExcludeFrom => "Exclude-from",
+            IncludeFrom => "Include-from",
+            FilesFrom => "Files-from",
+            Filter => "Filter",
+            Hardlinks => "-H hardlinks",
+            Acls => "-A acls",
+            Xattrs => "-X xattrs",
+            SshPort => "SSH port",
+            SshKey => "SSH key file",
+            SshExtra => "SSH extra",
+            RawArgs => "Raw args",
+        }
+    }
+
+    fn is_path(self) -> bool {
+        use F::*;
+        matches!(
+            self,
+            Source | Dest | ExcludeFrom | IncludeFrom | FilesFrom | SshKey
+        )
+    }
+
+    fn kind(self) -> Kind {
+        use F::*;
+        match self {
+            Name | Source | Dest | ExcludeFrom | IncludeFrom | FilesFrom | SshKey | SshExtra
+            | RawArgs => Kind::Text,
+            Excludes | Includes | Filter => Kind::List,
+            SshPort => Kind::Number,
+            _ => Kind::Bool,
+        }
+    }
+}
