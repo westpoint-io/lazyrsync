@@ -204,3 +204,72 @@ impl F {
         }
     }
 }
+
+pub struct Editor {
+    task: Task,
+    orig: Task,
+    taken: Vec<String>,
+
+    section_idx: usize,
+    field_idx: usize,
+    editing: bool,
+    buffer: String,
+    cursor: usize,
+    attempted: bool,
+}
+
+impl Editor {
+    pub fn edit(task: Task, taken: Vec<String>) -> Self {
+        Self {
+            orig: task.clone(),
+            task,
+            taken,
+            section_idx: 0,
+            field_idx: 0,
+            editing: false,
+            buffer: String::new(),
+            cursor: 0,
+            attempted: false,
+        }
+    }
+
+    pub fn orig_id(&self) -> &str {
+        &self.orig.id
+    }
+
+    pub fn current_section(&self) -> Section {
+        SECTIONS[self.section_idx]
+    }
+
+    pub fn focus_section(&mut self, s: Section) {
+        if let Some(i) = SECTIONS.iter().position(|x| *x == s) {
+            self.section_idx = i;
+            self.field_idx = 0;
+        }
+    }
+
+    pub fn field_count(&self) -> usize {
+        self.current_section().fields().len()
+    }
+
+    pub fn focus_field(&mut self, idx: usize) {
+        if idx < self.field_count() && idx != self.field_idx {
+            self.commit_edit();
+            self.field_idx = idx;
+            self.enter_form();
+        }
+    }
+
+    pub fn task(&self) -> &Task {
+        &self.task
+    }
+
+    fn current_field(&self) -> F {
+        self.current_section().fields()[self.field_idx]
+    }
+
+    pub fn enter_form(&mut self) {
+        self.buffer = self.get_text(self.current_field());
+        self.cursor = self.buffer.chars().count();
+        self.editing = true;
+    }
