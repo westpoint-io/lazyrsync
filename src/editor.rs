@@ -273,3 +273,77 @@ impl Editor {
         self.cursor = self.buffer.chars().count();
         self.editing = true;
     }
+
+    fn byte_at(&self, char_idx: usize) -> usize {
+        self.buffer
+            .char_indices()
+            .nth(char_idx)
+            .map(|(b, _)| b)
+            .unwrap_or(self.buffer.len())
+    }
+
+    fn backspace(&mut self) {
+        if self.cursor > 0 {
+            let b = self.byte_at(self.cursor - 1);
+            self.buffer.remove(b);
+            self.cursor -= 1;
+        }
+    }
+
+    fn delete_word(&mut self) {
+        let chars: Vec<char> = self.buffer.chars().collect();
+        let mut i = self.cursor.min(chars.len());
+        while i > 0 && chars[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        while i > 0 && !chars[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        let (start, end) = (self.byte_at(i), self.byte_at(self.cursor));
+        self.buffer.replace_range(start..end, "");
+        self.cursor = i;
+    }
+
+    fn delete_forward(&mut self) {
+        let len = self.buffer.chars().count();
+        if self.cursor < len {
+            let b = self.byte_at(self.cursor);
+            self.buffer.remove(b);
+        }
+    }
+
+    fn delete_to_start(&mut self) {
+        let end = self.byte_at(self.cursor);
+        self.buffer.replace_range(..end, "");
+        self.cursor = 0;
+    }
+
+    fn delete_to_end(&mut self) {
+        let start = self.byte_at(self.cursor);
+        self.buffer.truncate(start);
+    }
+
+    fn prev_word(&self) -> usize {
+        let chars: Vec<char> = self.buffer.chars().collect();
+        let mut i = self.cursor.min(chars.len());
+        while i > 0 && chars[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        while i > 0 && !chars[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        i
+    }
+
+    fn next_word(&self) -> usize {
+        let chars: Vec<char> = self.buffer.chars().collect();
+        let n = chars.len();
+        let mut i = self.cursor.min(n);
+        while i < n && !chars[i].is_whitespace() {
+            i += 1;
+        }
+        while i < n && chars[i].is_whitespace() {
+            i += 1;
+        }
+        i
+    }
