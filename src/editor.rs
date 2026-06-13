@@ -347,3 +347,61 @@ impl Editor {
         }
         i
     }
+
+    pub fn form_views(&self) -> Vec<FieldView> {
+        self.current_section()
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(i, &f)| {
+                let focused = i == self.field_idx;
+                let value = if focused && self.editing {
+                    self.buffer.clone()
+                } else {
+                    self.get_text(f)
+                };
+                let dirty = value != text_of(&self.orig, f);
+                let error = if matches!(f.kind(), Kind::Number) && !valid_port(&value) {
+                    Some("1-65535")
+                } else if self.attempted {
+                    self.field_error(f, &value)
+                } else {
+                    None
+                };
+                let cursor = if focused && self.editing {
+                    self.cursor.min(value.chars().count())
+                } else {
+                    0
+                };
+                FieldView {
+                    label: f.label(),
+                    value,
+                    focused,
+                    is_path: matches!(f, F::Source | F::Dest),
+                    is_dest: matches!(f, F::Dest),
+                    is_file: matches!(f, F::ExcludeFrom | F::IncludeFrom | F::FilesFrom),
+                    dirty,
+                    error,
+                    cursor,
+                }
+            })
+            .collect()
+    }
+
+    fn field_error(&self, f: F, value: &str) -> Option<&'static str> {
+        let v = value.trim();
+        match f {
+            F::Name if v.is_empty() => Some("required"),
+            F::Name if self.taken.iter().any(|t| t == v) => Some("taken"),
+            F::Source | F::Dest if v.is_empty() => Some("required"),
+            _ => None,
+        }
+    }
+
+    fn is_valid(&self) -> bool {
+        let name = self.task.id.trim();
+        !name.is_empty()
+            && !self.taken.iter().any(|t| t == name)
+            && !self.task.source.trim().is_empty()
+            && !self.task.dest.trim().is_empty()
+    }
