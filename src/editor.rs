@@ -405,3 +405,77 @@ impl Editor {
             && !self.task.source.trim().is_empty()
             && !self.task.dest.trim().is_empty()
     }
+
+    pub fn form_key(&mut self, key: KeyEvent) -> Outcome {
+        match key.code {
+            KeyCode::Esc => return Outcome::Cancel,
+            KeyCode::Enter => {
+                if matches!(self.current_field().kind(), Kind::Number) && !valid_port(&self.buffer)
+                {
+                    self.attempted = true;
+                    return Outcome::Rejected;
+                }
+                self.commit_edit();
+                if self.is_valid() {
+                    return Outcome::Save;
+                }
+                self.attempted = true;
+                self.enter_form();
+                return Outcome::Rejected;
+            }
+            KeyCode::Up | KeyCode::BackTab => {
+                self.commit_edit();
+                self.prev_field();
+                self.enter_form();
+            }
+            KeyCode::Down | KeyCode::Tab => {
+                self.commit_edit();
+                self.next_field();
+                self.enter_form();
+            }
+            KeyCode::Left | KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor = self.prev_word()
+            }
+            KeyCode::Right | KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor = self.next_word()
+            }
+            KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
+            KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = self.cursor.saturating_sub(1)
+            }
+            KeyCode::Right => self.cursor = (self.cursor + 1).min(self.buffer.chars().count()),
+            KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = (self.cursor + 1).min(self.buffer.chars().count())
+            }
+            KeyCode::Home => self.cursor = 0,
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self.cursor = 0,
+            KeyCode::End => self.cursor = self.buffer.chars().count(),
+            KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = self.buffer.chars().count()
+            }
+            KeyCode::Delete => {
+                self.delete_forward();
+                self.attempted = false;
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_forward();
+                self.attempted = false;
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_to_start();
+                self.attempted = false;
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_to_end();
+                self.attempted = false;
+            }
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.current_field().is_path() {
+                    self.buffer = crate::paths::complete_path(&self.buffer);
+                    self.cursor = self.buffer.chars().count();
+                }
+            }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_word();
+                self.attempted = false;
+            }
