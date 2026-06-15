@@ -688,3 +688,68 @@ fn ro_field(label: &str, value: String) -> Line<'static> {
         Span::styled(" ]", Style::new().dim()),
     ])
 }
+
+pub fn flags_display(flags: &Flags, selected: Option<usize>, w: usize) -> Vec<Line<'static>> {
+    flag_bools_grid(flags, selected, w)
+}
+
+pub fn filters_display(filters: &Filters, w: usize) -> Vec<Line<'static>> {
+    let val_w = w.saturating_sub(LABEL_W + 4);
+    let row = |label, v: String| ro_field(label, crate::ui::truncate(&v, val_w));
+    vec![
+        row("includes", filters.includes.join(", ")),
+        row("include-from", filters.include_from.clone()),
+        row("excludes", filters.excludes.join(", ")),
+        row("exclude-from", filters.exclude_from.clone()),
+        row("filter", filters.filter.join(", ")),
+        row("files-from", filters.files_from.clone()),
+    ]
+}
+
+fn valid_port(s: &str) -> bool {
+    let s = s.trim();
+    s.is_empty() || s.parse::<u32>().is_ok_and(|p| (1..=65535).contains(&p))
+}
+
+fn split_list(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|x| x.trim())
+        .filter(|x| !x.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_list_trims_and_drops_empties() {
+        assert_eq!(
+            split_list("*.tmp, .git/ ,, node_modules/"),
+            vec!["*.tmp", ".git/", "node_modules/"]
+        );
+    }
+
+    #[test]
+    fn valid_port_rejects_out_of_range() {
+        assert!(valid_port("22"));
+        assert!(valid_port("2222"));
+        assert!(valid_port(""));
+        assert!(!valid_port("0"));
+        assert!(!valid_port("70000"));
+    }
+
+    #[test]
+    fn delete_word_removes_back_to_whitespace() {
+        let mut ed = Editor::edit(Task::new("t", "/s/", "/d/"), vec![]);
+        ed.buffer = "one two three".into();
+        ed.cursor = ed.buffer.chars().count();
+        ed.delete_word();
+        assert_eq!(ed.buffer, "one two ");
+        ed.delete_word();
+        assert_eq!(ed.buffer, "one ");
+        ed.delete_word();
+        assert_eq!(ed.buffer, "");
+    }
+}
