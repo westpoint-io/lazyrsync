@@ -548,3 +548,72 @@ impl Editor {
             F::SshKey => self.task.ssh.keyfile = s.to_string(),
             F::SshExtra => self.task.ssh.extra = s.to_string(),
             F::RawArgs => self.task.advanced.raw_args = s.to_string(),
+            F::SshPort => {
+                self.task.ssh.port = s
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|p| (1..=65535).contains(p))
+                    .map_or(22, |p| p as u16)
+            }
+            _ => {}
+        }
+    }
+}
+
+fn text_of(p: &Task, f: F) -> String {
+    match f {
+        F::Name => p.id.clone(),
+        F::Source => p.source.clone(),
+        F::Dest => p.dest.clone(),
+        F::Excludes => p.filters.excludes.join(", "),
+        F::Includes => p.filters.includes.join(", "),
+        F::Filter => p.filters.filter.join(", "),
+        F::ExcludeFrom => p.filters.exclude_from.clone(),
+        F::IncludeFrom => p.filters.include_from.clone(),
+        F::FilesFrom => p.filters.files_from.clone(),
+        F::SshKey => p.ssh.keyfile.clone(),
+        F::SshExtra => p.ssh.extra.clone(),
+        F::RawArgs => p.advanced.raw_args.clone(),
+        F::SshPort => p.ssh.port.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn bool_of(fl: &Flags, f: F) -> bool {
+    match f {
+        F::Archive => fl.archive,
+        F::Compress => fl.compress,
+        F::Verbose => fl.verbose,
+        F::Human => fl.human,
+        F::Progress => fl.progress,
+        F::Delete => fl.delete,
+        F::DeleteExcluded => fl.delete_excluded,
+        F::Backup => fl.backup,
+        F::Update => fl.update,
+        F::Checksum => fl.checksum,
+        F::Partial => fl.partial,
+        F::SizeOnly => fl.size_only,
+        F::Existing => fl.existing,
+        F::IgnoreExisting => fl.ignore_existing,
+        F::Hardlinks => fl.hardlinks,
+        F::Acls => fl.acls,
+        F::Xattrs => fl.xattrs,
+        _ => false,
+    }
+}
+
+fn set_flag(fl: &mut Flags, f: F, v: bool) {
+    match f {
+        F::Archive => fl.archive = v,
+        F::Compress => fl.compress = v,
+        F::Verbose => fl.verbose = v,
+        F::Human => fl.human = v,
+        F::Progress => fl.progress = v,
+        F::Delete => fl.delete = v,
+        F::DeleteExcluded => fl.delete_excluded = v,
+        F::Backup => fl.backup = v,
+        F::Update => fl.update = v,
+        F::Checksum => fl.checksum = v,
+        F::Partial => fl.partial = v,
+        F::SizeOnly => fl.size_only = v,
+        F::Existing => fl.existing = v,
