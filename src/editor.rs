@@ -479,3 +479,72 @@ impl Editor {
                 self.delete_word();
                 self.attempted = false;
             }
+            KeyCode::Backspace if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.delete_word();
+                self.attempted = false;
+            }
+            KeyCode::Backspace => {
+                self.backspace();
+                self.attempted = false;
+            }
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.backspace();
+                self.attempted = false;
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                if matches!(self.current_field().kind(), Kind::Number) && !c.is_ascii_digit() {
+                    return Outcome::Continue;
+                }
+                let b = self.byte_at(self.cursor);
+                self.buffer.insert(b, c);
+                self.cursor += 1;
+                self.attempted = false;
+            }
+            _ => {}
+        }
+        Outcome::Continue
+    }
+
+    fn next_field(&mut self) {
+        let n = self.current_section().fields().len();
+        self.field_idx = (self.field_idx + 1) % n;
+    }
+
+    fn prev_field(&mut self) {
+        let n = self.current_section().fields().len();
+        self.field_idx = (self.field_idx + n - 1) % n;
+    }
+
+    fn commit_edit(&mut self) {
+        let f = self.current_field();
+        let buf = std::mem::take(&mut self.buffer);
+        self.set_text(f, &buf);
+        self.editing = false;
+    }
+
+    fn get_text(&self, f: F) -> String {
+        text_of(&self.task, f)
+    }
+
+    fn set_text(&mut self, f: F, s: &str) {
+        let s = s.trim();
+        match f {
+            F::Name => {
+                self.task.id = s.to_string();
+                self.task.label = s.to_string();
+            }
+            F::Source => self.task.source = s.to_string(),
+            F::Dest => self.task.dest = s.to_string(),
+            F::Excludes => self.task.filters.excludes = split_list(s),
+            F::Includes => self.task.filters.includes = split_list(s),
+            F::Filter => self.task.filters.filter = split_list(s),
+            F::ExcludeFrom => self.task.filters.exclude_from = s.to_string(),
+            F::IncludeFrom => self.task.filters.include_from = s.to_string(),
+            F::FilesFrom => self.task.filters.files_from = s.to_string(),
+            F::SshKey => self.task.ssh.keyfile = s.to_string(),
+            F::SshExtra => self.task.ssh.extra = s.to_string(),
+            F::RawArgs => self.task.advanced.raw_args = s.to_string(),
