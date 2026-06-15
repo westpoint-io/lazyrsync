@@ -617,3 +617,74 @@ fn set_flag(fl: &mut Flags, f: F, v: bool) {
         F::Partial => fl.partial = v,
         F::SizeOnly => fl.size_only = v,
         F::Existing => fl.existing = v,
+        F::IgnoreExisting => fl.ignore_existing = v,
+        F::Hardlinks => fl.hardlinks = v,
+        F::Acls => fl.acls = v,
+        F::Xattrs => fl.xattrs = v,
+        _ => {}
+    }
+}
+
+pub fn bool_flag_count() -> usize {
+    Section::Flags
+        .fields()
+        .iter()
+        .filter(|f| matches!(f.kind(), Kind::Bool))
+        .count()
+}
+
+pub fn delete_flag_index() -> usize {
+    Section::Flags
+        .fields()
+        .iter()
+        .filter(|f| matches!(f.kind(), Kind::Bool))
+        .position(|f| matches!(f, F::Delete))
+        .unwrap_or(0)
+}
+
+pub fn toggle_bool_flag(flags: &mut Flags, field_index: usize) {
+    if let Some(&f) = Section::Flags.fields().get(field_index) {
+        if matches!(f.kind(), Kind::Bool) {
+            let v = bool_of(flags, f);
+            set_flag(flags, f, !v);
+        }
+    }
+}
+
+pub fn flag_bools_grid(flags: &Flags, selected: Option<usize>, w: usize) -> Vec<Line<'static>> {
+    let fields = Section::Flags.fields();
+    let colw = (w / 2).max(15);
+    let bools: Vec<(usize, F)> = fields
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| matches!(f.kind(), Kind::Bool))
+        .map(|(i, &f)| (i, f))
+        .collect();
+    let mut lines = Vec::new();
+    for pair in bools.chunks(2) {
+        let mut spans = Vec::new();
+        for (i, f) in pair {
+            let on = bool_of(flags, *f);
+            let cell = format!("[{}] {}", if on { "x" } else { " " }, f.short());
+            let style = if selected == Some(*i) {
+                Style::new().fg(on_accent()).bg(accent()).bold()
+            } else if on {
+                Style::new().fg(added())
+            } else {
+                Style::new()
+            };
+            spans.push(Span::styled(format!("{cell:<colw$}"), style));
+        }
+        lines.push(Line::from(spans));
+    }
+    lines
+}
+
+fn ro_field(label: &str, value: String) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{label:<LABEL_W$}"), Style::new()),
+        Span::styled("[ ", Style::new().dim()),
+        Span::styled(value, Style::new().fg(muted())),
+        Span::styled(" ]", Style::new().dim()),
+    ])
+}
