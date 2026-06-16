@@ -122,3 +122,62 @@ fn parse_color(s: &str) -> Option<Color> {
 pub(crate) fn accent() -> Color {
     cur().accent
 }
+
+pub(crate) fn on_accent() -> Color {
+    cur().on_accent
+}
+
+pub(crate) fn secondary() -> Color {
+    cur().secondary
+}
+
+pub(crate) fn border() -> Color {
+    cur().border
+}
+
+pub(crate) fn muted() -> Color {
+    cur().muted
+}
+
+pub(crate) fn added() -> Color {
+    cur().added
+}
+
+pub(crate) fn modified() -> Color {
+    cur().modified
+}
+
+pub(crate) fn deleted() -> Color {
+    cur().deleted
+}
+
+pub(crate) fn warn() -> Color {
+    cur().warn
+}
+
+pub(crate) fn bytes() -> Color {
+    cur().bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_names_and_hex() {
+        assert_eq!(parse_color("lightblue"), Some(Color::LightBlue));
+        assert_eq!(parse_color("Light Blue"), Some(Color::LightBlue));
+        assert_eq!(parse_color("dark-gray"), Some(Color::DarkGray));
+        assert_eq!(parse_color("#5fafff"), Some(Color::Rgb(0x5f, 0xaf, 0xff)));
+        assert_eq!(parse_color("nonsense"), None);
+    }
+
+    #[test]
+    fn bad_values_fall_back_to_default() {
+        let spec = ThemeSpec {
+            accent: "nonsense".into(),
+            ..ThemeSpec::default()
+        };
+        assert_eq!(Theme::from_spec(&spec).accent, Color::LightBlue);
+    }
+}
