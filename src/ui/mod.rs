@@ -77,3 +77,47 @@ pub(crate) fn truncate(s: &str, max: usize) -> String {
     out.push('…');
     out
 }
+
+pub(crate) fn hint_line(pairs: &[(&'static str, &'static str)]) -> Line<'static> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, (k, d)) in pairs.iter().enumerate() {
+        if i > 0 {
+            spans.push("   ·   ".dim());
+        }
+        spans.push((*k).fg(accent()));
+        spans.push(format!(" {d}").fg(Color::Reset));
+    }
+    Line::from(spans).centered()
+}
+
+pub(crate) fn with_footer(
+    frame: &mut Frame,
+    cx: &Ctx,
+    area: Rect,
+    width: u16,
+    box_height: u16,
+    footer: Vec<Line<'static>>,
+) -> Rect {
+    let mut region = centered(area, width, box_height + footer.len() as u16);
+    let dx = cx.shake_dx();
+    if dx != 0 {
+        let max_x = area.width.saturating_sub(region.width) as i16;
+        region.x = (region.x as i16 + dx).clamp(0, max_x) as u16;
+    }
+    frame.render_widget(Clear, region);
+    for (i, line) in footer.into_iter().enumerate() {
+        frame.render_widget(
+            line,
+            Rect {
+                x: region.x,
+                y: region.y + box_height + i as u16,
+                width: region.width,
+                height: 1,
+            },
+        );
+    }
+    Rect {
+        height: box_height,
+        ..region
+    }
+}
