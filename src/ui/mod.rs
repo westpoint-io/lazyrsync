@@ -121,3 +121,43 @@ pub(crate) fn with_footer(
         ..region
     }
 }
+
+pub(crate) fn rail_constraints() -> [Constraint; 4] {
+    [
+        Constraint::Length(3),
+        Constraint::Min(5),
+        Constraint::Length(14),
+        Constraint::Length(8),
+    ]
+}
+
+pub(crate) fn rounded<'a>(focused: bool) -> Block<'a> {
+    let bs = if focused {
+        Style::new().fg(accent()).bold()
+    } else {
+        Style::new().fg(border())
+    };
+    Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(bs)
+}
+
+pub(crate) fn centered(area: Rect, width: u16, height: u16) -> Rect {
+    let w = width.min(area.width);
+    let h = height.min(area.height);
+    Rect {
+        x: area.x + (area.width - w) / 2,
+        y: area.y + (area.height - h) / 2,
+        width: w,
+        height: h,
+    }
+}
+
+pub(crate) fn pad_row(line: &mut Line, selected: bool, w: usize) {
+    if selected {
+        let pad = w.saturating_sub(line.width());
+        if pad > 0 {
+            line.push_span(" ".repeat(pad));
+        }
+    }
+}
