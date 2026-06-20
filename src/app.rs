@@ -63,3 +63,42 @@ impl Ctx {
         let nt = self.store.profiles[self.profile].tasks.len();
         self.task = self.task.min(nt.saturating_sub(1));
     }
+
+    pub fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
+        let at = Local::now().format("%H:%M:%S").to_string();
+        self.log.push(LogEntry {
+            at,
+            kind,
+            text: text.into(),
+        });
+        let n = self.log.len();
+        if n > 200 {
+            self.log.drain(0..n - 200);
+        }
+    }
+
+    pub fn reject(&mut self) {
+        self.shake = 6;
+    }
+
+    pub fn shake_dx(&self) -> i16 {
+        const WAVE: [i16; 7] = [0, 1, -1, 2, -2, 3, -3];
+        WAVE[(self.shake as usize).min(WAVE.len() - 1)]
+    }
+
+    pub fn save(&mut self, ok_msg: &str) {
+        match self.store.save() {
+            Ok(()) => self.push_log(LogKind::Info, ok_msg.to_string()),
+            Err(e) => self.push_log(LogKind::Error, format!("save failed: {e}")),
+        }
+    }
+}
+
+pub enum Cmd {
+    None,
+    Quit,
+    Overlay(Overlay),
+    Close,
+    RequestRun(Vec<Task>),
+    StartRun(Vec<Task>),
+}
