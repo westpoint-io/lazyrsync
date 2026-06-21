@@ -102,3 +102,34 @@ pub enum Cmd {
     RequestRun(Vec<Task>),
     StartRun(Vec<Task>),
 }
+
+pub trait Component {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, cx: &Ctx);
+    fn on_key(&mut self, key: KeyEvent, cx: &mut Ctx) -> Cmd;
+    fn on_mouse(&mut self, _m: MouseEvent, _cx: &mut Ctx) -> Cmd {
+        Cmd::None
+    }
+    fn busy(&self) -> bool {
+        false
+    }
+    fn tick(&mut self, _cx: &mut Ctx) {}
+}
+
+pub enum Overlay {
+    Prompt(Prompt),
+    AddTask(AddTask),
+    Edit(Box<SectionEdit>),
+    ConfirmDelete(ConfirmDelete),
+    ConfirmClearFilters(ConfirmClearFilters),
+    ConfirmRun(ConfirmRun),
+    Alert(Alert),
+    Help(Help),
+}
+
+impl Overlay {
+    fn is_text_input(&self) -> bool {
+        matches!(
+            self,
+            Overlay::Prompt(_) | Overlay::AddTask(_) | Overlay::Edit(_)
+        )
+    }
