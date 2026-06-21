@@ -133,3 +133,39 @@ impl Overlay {
             Overlay::Prompt(_) | Overlay::AddTask(_) | Overlay::Edit(_)
         )
     }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        match self {
+            Overlay::Prompt(p) => p.draw(frame, area, cx),
+            Overlay::AddTask(a) => a.draw(frame, area, cx),
+            Overlay::Edit(e) => e.draw(frame, area, cx),
+            Overlay::ConfirmDelete(c) => c.draw(frame, area, cx),
+            Overlay::ConfirmClearFilters(c) => c.draw(frame, area, cx),
+            Overlay::ConfirmRun(c) => c.draw(frame, area, cx),
+            Overlay::Alert(a) => a.draw(frame, area, cx),
+            Overlay::Help(h) => h.draw(frame, area),
+        }
+    }
+
+    fn on_key(&mut self, key: KeyEvent, cx: &mut Ctx) -> Cmd {
+        match self {
+            Overlay::Prompt(p) => p.on_key(key, cx),
+            Overlay::AddTask(a) => a.on_key(key, cx),
+            Overlay::Edit(e) => e.on_key(key, cx),
+            Overlay::ConfirmDelete(c) => c.on_key(key, cx),
+            Overlay::ConfirmClearFilters(c) => c.on_key(key, cx),
+            Overlay::ConfirmRun(c) => c.on_key(key, cx),
+            Overlay::Alert(a) => a.on_key(key, cx),
+            Overlay::Help(h) => h.on_key(key),
+        }
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, cx: &mut Ctx) -> Cmd {
+        match self {
+            Overlay::AddTask(a) => a.on_mouse(m, cx),
+            Overlay::Edit(e) => e.on_mouse(m, cx),
+            Overlay::Help(h) => h.on_mouse(m, cx),
+            _ => Cmd::None,
+        }
+    }
+}
