@@ -207,3 +207,38 @@ impl App {
             if self.busy() {
                 let wait = if self.ctx.shake > 0 { 40 } else { 100 };
                 if event::poll(Duration::from_millis(wait))? {
+                    let ev = event::read()?;
+                    self.dispatch(ev);
+                }
+                self.tick_async();
+                if self.ctx.shake > 0 {
+                    self.ctx.shake -= 1;
+                }
+                if last_tick.elapsed() >= Duration::from_millis(100) {
+                    self.ctx.tick = self.ctx.tick.wrapping_add(1);
+                    last_tick = Instant::now();
+                }
+            } else {
+                let ev = event::read()?;
+                self.dispatch(ev);
+            }
+        }
+        Ok(())
+    }
+
+    fn busy(&self) -> bool {
+        self.ctx.shake > 0 || self.browse.busy()
+    }
+
+    fn tick_async(&mut self) {
+        self.browse.tick(&mut self.ctx);
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {
+        self.ctx.area = frame.area();
+        let area = self.ctx.area;
+        self.browse.draw(frame, area, &self.ctx);
+        if let Some(overlay) = &mut self.overlay {
+            overlay.draw(frame, area, &self.ctx);
+        }
+    }
