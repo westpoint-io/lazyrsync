@@ -169,3 +169,41 @@ impl Overlay {
         }
     }
 }
+
+pub struct App {
+    ctx: Ctx,
+    browse: Browse,
+    overlay: Option<Overlay>,
+    running: bool,
+}
+
+impl App {
+    pub fn new() -> anyhow::Result<Self> {
+        let settings = Settings::load();
+        crate::ui::apply_theme(&settings.theme);
+        Ok(Self {
+            ctx: Ctx {
+                store: Store::load()?,
+                settings,
+                log: Vec::new(),
+                area: Rect::new(0, 0, 0, 0),
+                tick: 0,
+                shake: 0,
+                profile: 0,
+                pcursor: 0,
+                task: 0,
+                subtab: 0,
+            },
+            browse: Browse::new(),
+            overlay: None,
+            running: true,
+        })
+    }
+
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
+        let mut last_tick = Instant::now();
+        while self.running {
+            terminal.draw(|frame| self.draw(frame))?;
+            if self.busy() {
+                let wait = if self.ctx.shake > 0 { 40 } else { 100 };
+                if event::poll(Duration::from_millis(wait))? {
