@@ -61,3 +61,68 @@ impl Browse {
         self.runs.enqueue(batch, cx);
         self.focus = 3;
     }
+
+    pub fn text_entry(&self) -> bool {
+        self.filtering || self.runs.searching()
+    }
+
+    const RAIL_ORDER: [usize; 4] = [3, 0, 1, 2];
+
+    fn rail_pos(&self) -> usize {
+        Self::RAIL_ORDER
+            .iter()
+            .position(|f| *f == self.focus)
+            .unwrap_or(0)
+    }
+
+    fn focus_at(pos: usize) -> usize {
+        Self::RAIL_ORDER[pos % 4]
+    }
+
+    pub fn on_resume(&mut self, cx: &Ctx) {
+        let ntasks = cx.active_profile().map_or(0, |p| p.tasks.len());
+        if self.visual.is_some() && ntasks != self.visual_len {
+            self.visual = None;
+        }
+        self.tcursor = self.tcursor.min(ntasks.saturating_sub(1));
+        let nfilters = cx.active_task().map_or(0, |t| t.filters.excludes.len());
+        self.filter = self.filter.min(nfilters.saturating_sub(1));
+    }
+
+    fn visual_range(&self) -> Option<(usize, usize)> {
+        self.visual
+            .map(|a| (a.min(self.tcursor), a.max(self.tcursor)))
+    }
+
+    fn is_filtering(&self) -> bool {
+        self.filtering
+    }
+
+    fn filter_active(&self) -> bool {
+        !self.list_filter.is_empty()
+    }
+
+    fn row_matches(&self, name: &str) -> bool {
+        self.list_filter.is_empty() || search_match(&self.list_filter, name)
+    }
+
+    fn visible_rows(&self, cx: &Ctx) -> Vec<usize> {
+        if cx.subtab == 1 {
+            cx.store
+                .profiles
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| self.row_matches(&p.name))
+                .map(|(i, _)| i)
+                .collect()
+        } else {
+            cx.active_profile().map_or(Vec::new(), |p| {
+                p.tasks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| self.row_matches(&t.id))
+                    .map(|(i, _)| i)
+                    .collect()
+            })
+        }
+    }
