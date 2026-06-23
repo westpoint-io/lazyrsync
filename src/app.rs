@@ -274,3 +274,40 @@ impl App {
             None => self.browse.text_entry(),
         }
     }
+
+    fn on_key(&mut self, key: KeyEvent) -> Cmd {
+        if key.code == KeyCode::Char('g') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.ctx.settings.hints = !self.ctx.settings.hints;
+            let _ = self.ctx.settings.save();
+            return Cmd::None;
+        }
+        if let Some(overlay) = &mut self.overlay {
+            return overlay.on_key(key, &mut self.ctx);
+        }
+        self.browse.on_key(key, &mut self.ctx)
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent) -> Cmd {
+        if let Some(overlay) = &mut self.overlay {
+            return overlay.on_mouse(m, &mut self.ctx);
+        }
+        self.browse.on_mouse(m, &mut self.ctx)
+    }
+
+    fn apply(&mut self, cmd: Cmd) {
+        match cmd {
+            Cmd::None => {}
+            Cmd::Quit => self.running = false,
+            Cmd::Overlay(overlay) => self.overlay = Some(overlay),
+            Cmd::Close => {
+                self.overlay = None;
+                self.browse.on_resume(&self.ctx);
+            }
+            Cmd::RequestRun(batch) => self.apply(Cmd::StartRun(batch)),
+            Cmd::StartRun(batch) => {
+                self.overlay = None;
+                self.browse.start_run(batch, &mut self.ctx);
+            }
+        }
+    }
+}
