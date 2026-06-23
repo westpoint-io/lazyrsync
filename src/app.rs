@@ -242,3 +242,35 @@ impl App {
             overlay.draw(frame, area, &self.ctx);
         }
     }
+
+    fn dispatch(&mut self, ev: Event) {
+        match ev {
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                let cmd = self.on_key(key);
+                self.apply(cmd);
+            }
+            Event::Mouse(m) => {
+                let cmd = self.on_mouse(m);
+                self.apply(cmd);
+            }
+            Event::Paste(text) => self.on_paste(text),
+            _ => {}
+        }
+    }
+
+    fn on_paste(&mut self, text: String) {
+        if !self.text_entry_active() {
+            return;
+        }
+        for c in text.chars().filter(|c| !c.is_control()) {
+            let cmd = self.on_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+            self.apply(cmd);
+        }
+    }
+
+    fn text_entry_active(&self) -> bool {
+        match &self.overlay {
+            Some(o) => o.is_text_input(),
+            None => self.browse.text_entry(),
+        }
+    }
