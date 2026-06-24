@@ -186,3 +186,67 @@ impl Browse {
         };
         (cur.min(n.saturating_sub(1)), n)
     }
+
+    fn scroll_preview(&mut self, delta: i32) {
+        self.runs.scroll(delta);
+    }
+
+    fn move_sel(&mut self, cx: &mut Ctx, delta: i32) {
+        if self.focus == 3 {
+            self.runs.select(delta);
+            return;
+        }
+        if self.focus == 0 {
+            let vis = self.visible_rows(cx);
+            if vis.is_empty() {
+                return;
+            }
+            let pos = self.cursor_pos(cx);
+            let np = (pos as i32 + delta).rem_euclid(vis.len() as i32) as usize;
+            self.set_list_cursor(cx, vis[np]);
+            return;
+        }
+        if self.focus == 1 {
+            self.move_flag(delta, 0);
+            return;
+        }
+        let n = self.rows_in(cx, self.focus) as i32;
+        self.filter = (self.filter as i32 + delta).rem_euclid(n) as usize;
+    }
+
+    fn move_flag(&mut self, dr: i32, dc: i32) {
+        const COLS: i32 = 2;
+        let n = editor::bool_flag_count() as i32;
+        if n == 0 {
+            return;
+        }
+        let i = self.flag as i32;
+        let rows = (n + COLS - 1) / COLS;
+        let row = (i / COLS + dr).clamp(0, rows - 1);
+        let col = (i % COLS + dc).clamp(0, COLS - 1);
+        let target = row * COLS + col;
+        self.flag = target.min(n - 1) as usize;
+    }
+}
+
+impl Component for Browse {
+    fn busy(&self) -> bool {
+        self.runs.running() || self.runs.scanning()
+    }
+
+    fn tick(&mut self, cx: &mut Ctx) {
+        self.runs.tick(cx);
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        self.render(frame, area, cx);
+    }
+
+    fn on_key(&mut self, key: KeyEvent, cx: &mut Ctx) -> Cmd {
+        self.handle_key(key, cx)
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, cx: &mut Ctx) -> Cmd {
+        self.handle_mouse(m, cx)
+    }
+}
