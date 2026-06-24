@@ -126,3 +126,63 @@ impl Browse {
             })
         }
     }
+
+    fn list_cursor(&self, cx: &Ctx) -> usize {
+        if cx.subtab == 1 {
+            cx.pcursor
+        } else {
+            self.tcursor
+        }
+    }
+
+    fn set_list_cursor(&mut self, cx: &mut Ctx, real: usize) {
+        if cx.subtab == 1 {
+            cx.pcursor = real;
+        } else {
+            self.tcursor = real;
+        }
+    }
+
+    fn cursor_pos(&self, cx: &Ctx) -> usize {
+        let cur = self.list_cursor(cx);
+        self.visible_rows(cx)
+            .iter()
+            .position(|&i| i == cur)
+            .unwrap_or(0)
+    }
+
+    fn snap_cursor(&mut self, cx: &mut Ctx) {
+        let vis = self.visible_rows(cx);
+        if !vis.contains(&self.list_cursor(cx)) {
+            let first = vis.first().copied().unwrap_or(0);
+            self.set_list_cursor(cx, first);
+        }
+    }
+
+    fn context_task<'a>(&self, cx: &'a Ctx) -> Option<&'a crate::profile::Task> {
+        if self.focus == 0 && cx.subtab == 0 {
+            cx.active_profile().and_then(|p| p.tasks.get(self.tcursor))
+        } else {
+            cx.active_task()
+        }
+    }
+
+    fn rows_in(&self, cx: &Ctx, panel: usize) -> usize {
+        match panel {
+            0 => self.visible_rows(cx).len().max(1),
+            1 => editor::bool_flag_count(),
+            _ => cx
+                .active_task()
+                .map_or(1, |t| t.filters.excludes.len().max(1)),
+        }
+    }
+
+    fn panel_count(&self, cx: &Ctx, panel: usize) -> (usize, usize) {
+        let n = self.rows_in(cx, panel);
+        let cur = match panel {
+            0 => self.cursor_pos(cx),
+            1 => self.flag,
+            _ => self.filter,
+        };
+        (cur.min(n.saturating_sub(1)), n)
+    }
