@@ -197,3 +197,98 @@ impl Browse {
             );
         }
     }
+
+    fn panel_body(&self, cx: &Ctx, panel: usize, w: usize, h: usize) -> Text<'static> {
+        let focused = panel == self.focus;
+        let hl = move |i: usize, cur: usize, line: Line<'static>| {
+            if i == cur && focused {
+                line.patch_style(Style::new().fg(on_accent()).bg(accent()).bold())
+            } else {
+                line
+            }
+        };
+        match panel {
+            0 if cx.subtab == 1 => {
+                if cx.store.profiles.is_empty() {
+                    return empty_state("Add your first profile", h);
+                }
+                let vis = self.visible_rows(cx);
+                if vis.is_empty() {
+                    return empty_state(&format!("No matches for '{}'", self.list_filter), h);
+                }
+                Text::from(
+                    vis.iter()
+                        .map(|&i| {
+                            let p = &cx.store.profiles[i];
+                            let hot = i == cx.pcursor && focused;
+                            let (age, acolor) = task_age(p.created);
+                            let gutter = if i == cx.profile {
+                                let c = if hot { on_accent() } else { accent() };
+                                Span::styled(format!("{:>3} ", "*"), Style::new().fg(c).bold())
+                            } else if hot {
+                                Span::raw(format!("{age:>3} "))
+                            } else {
+                                Span::styled(format!("{age:>3} "), Style::new().fg(acolor))
+                            };
+                            let ntxt = p.tasks.len().to_string();
+                            let right_w = ntxt.chars().count() + " tasks".len();
+                            let name_max = w.saturating_sub(4 + right_w + 2);
+                            let left = vec![gutter, truncate(&p.name, name_max).into()];
+                            let right = vec![ntxt.fg(secondary()).bold(), " tasks".fg(secondary())];
+                            hl(i, cx.pcursor, justify(left, right, w))
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }
+            0 => match cx.active_profile() {
+                Some(p) if !p.tasks.is_empty() => {
+                    let vis = self.visible_rows(cx);
+                    if vis.is_empty() {
+                        return empty_state(&format!("No matches for '{}'", self.list_filter), h);
+                    }
+                    let (lo, hi) = self.visual_range().unwrap_or((usize::MAX, 0));
+                    Text::from(
+                        vis.iter()
+                            .map(|&i| {
+                                let t = &p.tasks[i];
+                                let hot = focused && (i == self.tcursor || (i >= lo && i <= hi));
+                                let selected = i == cx.task;
+                                let (age, acolor) = task_age(t.created);
+                                let gutter = if selected {
+                                    let c = if hot { on_accent() } else { accent() };
+                                    Span::styled(format!("{:>3} ", "*"), Style::new().fg(c).bold())
+                                } else if hot {
+                                    Span::raw(format!("{age:>3} "))
+                                } else {
+                                    Span::styled(format!("{age:>3} "), Style::new().fg(acolor))
+                                };
+                                let id_max = w.saturating_sub(4);
+                                let mut line =
+                                    Line::from(vec![gutter, truncate(&t.id, id_max).into()]);
+                                pad_row(&mut line, hot, w);
+                                if hot {
+                                    line.patch_style(
+                                        Style::new().fg(on_accent()).bg(accent()).bold(),
+                                    )
+                                } else {
+                                    line
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                _ => empty_state("Add your first task", h),
+            },
+            1 => match cx.active_task() {
+                Some(t) => {
+                    let sel = if focused { Some(self.flag) } else { None };
+                    Text::from(editor::flags_display(&t.flags, sel, w))
+                }
+                None => Text::from(Line::from("—".fg(Color::Reset))),
+            },
+            _ => match cx.active_task() {
+                Some(t) => Text::from(editor::filters_display(&t.filters, w)),
+                None => Text::from(Line::from("—".fg(Color::Reset))),
+            },
+        }
+    }
