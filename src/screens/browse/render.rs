@@ -95,3 +95,105 @@ impl Browse {
             if max_scroll > 0 {
                 let mut sb = ScrollbarState::new(max_scroll).position(off);
                 frame.render_stateful_widget(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .style(Style::new().fg(accent()))
+                        .begin_symbol(Some("▲"))
+                        .end_symbol(Some("▼")),
+                    log.inner(Margin::new(0, 1)),
+                    &mut sb,
+                );
+            }
+        }
+
+        self.draw_status(frame, status, cx);
+    }
+
+    fn draw_rail(&self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        let areas = Layout::vertical(rail_constraints()).split(area);
+        let num_style = |focused: bool| {
+            if focused {
+                Style::new().fg(accent()).bold()
+            } else {
+                Style::new()
+            }
+        };
+        let simple = |num: usize, name: &'static str, focused: bool| {
+            let label = if focused {
+                name.fg(accent()).bold()
+            } else {
+                name.into()
+            };
+            Line::from(vec![
+                Span::styled(format!("[{num}] "), num_style(focused)),
+                label,
+            ])
+        };
+
+        for (i, &f) in Self::RAIL_ORDER.iter().enumerate() {
+            let focused = f == self.focus;
+            let num = i + 1;
+            let mut block = rounded(focused);
+            let mut offset = 0u16;
+
+            match f {
+                3 => {
+                    block = block.title(simple(num, "Runs", focused));
+                    if let Some((cur, total)) = self.runs.position() {
+                        block = block.title_bottom(
+                            Line::from(Span::styled(format!("{cur}/{total} "), num_style(focused)))
+                                .right_aligned(),
+                        );
+                    }
+                }
+                0 => {
+                    let mut spans = vec![Span::styled(format!("[{num}] "), num_style(focused))];
+                    for (j, name) in SUBTABS.iter().enumerate() {
+                        if j > 0 {
+                            spans.push(" - ".fg(Color::Reset).not_bold());
+                        }
+                        let s = *name;
+                        spans.push(if j == cx.subtab {
+                            s.fg(accent()).bold()
+                        } else {
+                            s.fg(Color::Reset).not_bold()
+                        });
+                    }
+                    block = block.title(Line::from(spans));
+                    let (cur, n) = self.panel_count(cx, 0);
+                    block = block.title_bottom(
+                        Line::from(Span::styled(
+                            format!("{} of {} ", cur + 1, n),
+                            num_style(focused),
+                        ))
+                        .right_aligned(),
+                    );
+                    let visible = (areas[i].height as usize).saturating_sub(2);
+                    offset = (cur + 1).saturating_sub(visible) as u16;
+                }
+                1 => {
+                    let mut spans = simple(num, "Flags", focused).spans;
+                    let raw = cx
+                        .active_task()
+                        .map_or(0, |t| rsync::split_args(&t.advanced.raw_args).len());
+                    if raw > 0 {
+                        let c = if focused { accent() } else { Color::Reset };
+                        spans.push(format!(" ({raw} raw)").fg(c));
+                    }
+                    block = block.title(Line::from(spans));
+                }
+                _ => block = block.title(simple(num, "Filters", focused)),
+            }
+
+            let w = (areas[i].width as usize).saturating_sub(2);
+            let h = (areas[i].height as usize).saturating_sub(2);
+            let panel_body = if f == 3 {
+                Text::from(self.runs.rail_line(cx))
+            } else {
+                self.panel_body(cx, f, w, h)
+            };
+            frame.render_widget(
+                Paragraph::new(panel_body).block(block).scroll((offset, 0)),
+                areas[i],
+            );
+        }
+    }
