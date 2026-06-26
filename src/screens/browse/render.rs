@@ -482,3 +482,101 @@ impl Browse {
         }
         spans
     }
+
+    fn draw_context(&self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        let visible = (area.height as usize).saturating_sub(2);
+        let (ctx_label, text) = self.context_view(cx, visible);
+        let name = match self.focus {
+            3 => "Run",
+            1 => "Command",
+            2 => "Filters",
+            _ => "Status",
+        };
+        let mut title = vec!["[0] ".into(), name.into()];
+        if self.focus == 3 {
+            if let Some((tag, color)) = self.runs.sel_mode() {
+                title.push(format!(" [{tag}]").fg(color).bold());
+            }
+        }
+        let block = rounded(false)
+            .title(Line::from(title))
+            .title(Line::from(ctx_label.fg(secondary())).right_aligned());
+        let para = Paragraph::new(text).block(block);
+        let para = if self.focus == 3 {
+            para
+        } else {
+            para.wrap(Wrap { trim: false })
+        };
+        frame.render_widget(para, area);
+        if self.focus == 3 {
+            if let Some((total, top)) = self.runs.overflow(visible) {
+                let mut sb = ScrollbarState::new(total.saturating_sub(visible)).position(top);
+                frame.render_stateful_widget(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .style(Style::new().fg(accent()))
+                        .begin_symbol(Some("▲"))
+                        .end_symbol(Some("▼")),
+                    area.inner(Margin::new(0, 1)),
+                    &mut sb,
+                );
+            }
+        }
+    }
+
+    fn context_view(&self, cx: &Ctx, visible: usize) -> (String, Text<'static>) {
+        if self.focus == 3 {
+            let label = self
+                .runs
+                .sel_label()
+                .map(|l| format!(" {l} "))
+                .unwrap_or_default();
+            return (label, self.runs.main_text(cx, visible));
+        }
+        if self.focus == 0 && cx.subtab == 1 {
+            return match cx.store.profiles.get(cx.pcursor) {
+                Some(p) => (format!(" {} ", p.name), self.detail_profile(p)),
+                None => (" ".into(), empty_state("Add your first profile", visible)),
+            };
+        }
+        let Some(t) = self.context_task(cx) else {
+            return (" ".into(), empty_state("Add your first task", visible));
+        };
+        let label = format!(" {} ", t.id);
+        match self.focus {
+            1 => (label, self.command_view(t)),
+            2 => (label, self.filters_view(t)),
+            _ => (label, self.detail_task(t)),
+        }
+    }
+
+    fn command_view(&self, t: &Task) -> Text<'static> {
+        Text::from(vec![
+            Line::from(rsync::resolved_command(t, false)),
+            Line::from(""),
+            Line::from("toggle flags in [2] — the command updates live".fg(secondary())),
+        ])
+    }
+
+    fn filters_view(&self, t: &Task) -> Text<'static> {
+        let f = &t.filters;
+        let rows: [(&str, String, Color); 6] = [
+            ("includes", f.includes.join(", "), added()),
+            ("include-from", f.include_from.clone(), added()),
+            ("excludes", f.excludes.join(", "), warn()),
+            ("exclude-from", f.exclude_from.clone(), warn()),
+            ("filter", f.filter.join(", "), accent()),
+            ("files-from", f.files_from.clone(), secondary()),
+        ];
+        let lines: Vec<Line> = rows
+            .into_iter()
+            .map(|(k, v, c)| {
+                if v.is_empty() {
+                    kvc(k, "None", Color::Reset)
+                } else {
+                    kvc(k, v, c)
+                }
+            })
+            .collect();
+        Text::from(lines)
+    }
+}
