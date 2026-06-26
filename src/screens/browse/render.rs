@@ -387,3 +387,98 @@ impl Browse {
                 ("Run", "r"),
                 ("Delete", "d"),
                 ("Dismiss", "<esc>"),
+                ("Keybindings", "?"),
+            ]
+            .iter()
+            .enumerate()
+            {
+                if i > 0 {
+                    spans.push(" │ ".dim());
+                }
+                spans.push(format!("{label}: ").fg(secondary()));
+                spans.push((*k).fg(accent()));
+            }
+            frame.render_widget(Line::from(spans), left);
+            return;
+        }
+
+        let mut keys: Vec<(&str, &str)> = match (self.focus, cx.subtab) {
+            (3, _) if self.runs.running() => {
+                vec![("Cancel", "c"), ("Select", "j/k")]
+            }
+            (3, _) => vec![("Select", "j/k"), ("Run", "r"), ("Search", "/")],
+            (0, 1) => vec![
+                ("Add", "a"),
+                ("Rename", "r"),
+                ("Delete", "d"),
+                ("Filter", "/"),
+            ],
+            (0, _) => vec![
+                ("Select", "␣"),
+                ("Run", "r"),
+                ("All", "R"),
+                ("Preview", "p"),
+                ("Edit", "e"),
+                ("SSH", "s"),
+                ("Add", "a"),
+                ("Del", "d"),
+                ("Filter", "/"),
+            ],
+            (1, _) => vec![("Toggle", "␣"), ("Extra flags", "x"), ("Preview", "p")],
+            _ => vec![("Edit", "i"), ("Clear", "<ctrl+r>"), ("Preview", "p")],
+        };
+        keys.push(("Keybindings", "?"));
+        keys.push(("Quit", "q"));
+
+        let mut spans = vec![" ".into()];
+        for (i, (label, k)) in keys.iter().enumerate() {
+            if i > 0 {
+                spans.push(" │ ".dim());
+            }
+            spans.push(format!("{label}: ").fg(secondary()));
+            spans.push(k.fg(accent()));
+        }
+        frame.render_widget(Line::from(spans), left);
+    }
+
+    fn search_status_spans(&self, tick: usize) -> Vec<Span<'static>> {
+        let q = self.runs.search_query().to_string();
+        if self.runs.searching() {
+            return vec![
+                " Search: ".fg(accent()),
+                q.fg(Color::Reset),
+                "█".fg(accent()),
+            ];
+        }
+        if self.runs.scanning() {
+            let dots = format!("{:<3}", ".".repeat(1 + (tick / 3) % 3));
+            return vec![
+                " Search: ".fg(accent()),
+                format!("searching for '{q}'{dots} ").fg(Color::Reset),
+                "<esc>".fg(accent()),
+                ": cancel".fg(secondary()),
+            ];
+        }
+        let (pos, count) = self.runs.match_pos();
+        let mut spans = vec![" Search: ".fg(accent())];
+        if count == 0 {
+            spans.push(format!("No matches for '{q}'").fg(warn()));
+        } else {
+            spans.push(format!("matches for '{q}' ({pos} of {count})").fg(Color::Reset));
+        }
+        let hints = [
+            ("n", "Next match"),
+            ("N", "Previous match"),
+            ("<esc>", "Exit search mode"),
+        ];
+        for (i, (k, label)) in hints.iter().enumerate() {
+            spans.push(if i == 0 {
+                "   ".into()
+            } else {
+                ", ".fg(secondary())
+            });
+            spans.push(k.fg(accent()));
+            spans.push(format!(": {label}").fg(secondary()));
+        }
+        spans
+    }
