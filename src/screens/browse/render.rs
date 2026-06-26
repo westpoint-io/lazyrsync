@@ -292,3 +292,98 @@ impl Browse {
             },
         }
     }
+
+    fn detail_profile(&self, p: &Profile) -> Text<'static> {
+        let n = p.tasks.len();
+        let plural = if n == 1 { "task" } else { "tasks" };
+        let mut lines = vec![kvc("tasks", format!("{n} {plural}"), added())];
+
+        let mut dests: Vec<&str> = Vec::new();
+        for t in &p.tasks {
+            if !dests.contains(&t.dest.as_str()) {
+                dests.push(&t.dest);
+            }
+        }
+        if !dests.is_empty() {
+            const CAP: usize = 3;
+            let shown = dests
+                .iter()
+                .take(CAP)
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let extra = dests.len().saturating_sub(CAP);
+            let val = if extra > 0 {
+                format!("{shown}, +{extra} more")
+            } else {
+                shown
+            };
+            lines.push(kvc("destinations", val, secondary()));
+        }
+        Text::from(lines)
+    }
+
+    fn detail_task(&self, t: &Task) -> Text<'static> {
+        let mut lines = vec![
+            kvc("action", t.action.label().to_string(), added()),
+            kvc("source", t.source.clone(), secondary()),
+            kvc("destination", t.dest.clone(), secondary()),
+        ];
+        if let Some(si) = rsync::snapshot_info(t) {
+            lines.push(kvc("snapshots", si.count.to_string(), added()));
+            if si.count > 0 {
+                let (age, c) = task_age(si.newest_unix);
+                lines.push(kvc("latest", format!("#{}  ·  {age}", si.latest), c));
+            }
+            lines.push(kvc("next run", format!("#{}", si.next), secondary()));
+        }
+        Text::from(lines)
+    }
+
+    fn draw_status(&self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        let [left, right] =
+            Layout::horizontal([Constraint::Min(10), Constraint::Length(17)]).areas(area);
+        frame.render_widget(
+            Line::from("lazyrsync 0.1.0 ".fg(Color::Reset)).right_aligned(),
+            right,
+        );
+
+        if self.focus == 0 && self.is_filtering() {
+            frame.render_widget(
+                Line::from(vec![
+                    " Filter: ".fg(accent()),
+                    self.list_filter.clone().fg(Color::Reset),
+                    "█".fg(accent()),
+                ]),
+                left,
+            );
+            return;
+        }
+
+        if self.focus == 0 && self.filter_active() {
+            let shown = self.visible_rows(cx).len();
+            frame.render_widget(
+                Line::from(vec![
+                    " Filter: ".fg(accent()),
+                    format!("'{}' ({shown} shown)", self.list_filter).fg(Color::Reset),
+                    "   ".into(),
+                    "<esc>".fg(accent()),
+                    ": clear filter".fg(secondary()),
+                ]),
+                left,
+            );
+            return;
+        }
+
+        if self.focus == 3 && (self.runs.searching() || self.runs.search_on()) {
+            frame.render_widget(Line::from(self.search_status_spans(cx.tick)), left);
+            return;
+        }
+
+        if self.focus == 0 && cx.subtab == 0 && self.visual.is_some() {
+            let n = self.visual_range().map_or(0, |(lo, hi)| hi - lo + 1);
+            let mut spans = vec![format!(" {n} selected").fg(accent()).bold(), "   ".into()];
+            for (i, (label, k)) in [
+                ("Run", "r"),
+                ("Delete", "d"),
+                ("Dismiss", "<esc>"),
