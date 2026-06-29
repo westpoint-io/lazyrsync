@@ -201,3 +201,106 @@ impl Browse {
             _ => Cmd::None,
         }
     }
+
+    pub(super) fn handle_mouse(&mut self, m: MouseEvent, cx: &mut Ctx) -> Cmd {
+        let (rail, main, log) = self.geometry(cx);
+        let at = Position::new(m.column, m.row);
+        match m.kind {
+            MouseEventKind::Up(MouseButton::Left) => self.scroll_drag = false,
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if self.scroll_drag && self.focus == 3 {
+                    self.scroll_to_row(main, m.row);
+                }
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                let track = m.column + 1 >= main.x + main.width && main.contains(at);
+                if self.focus == 3 && track && main.height > 2 {
+                    self.scroll_drag = true;
+                    self.scroll_to_row(main, m.row);
+                } else if rail[0].contains(at) {
+                    self.focus = 3;
+                } else if rail[1].contains(at) {
+                    self.focus = 0;
+                    if m.row == rail[1].y {
+                        self.click_subtab(cx, rail[1], m.column);
+                    } else {
+                        self.click_task_list(cx, rail[1], m.row);
+                    }
+                } else if rail[2].contains(at) {
+                    self.focus = 1;
+                    self.click_flag(rail[2], m.row, m.column);
+                } else if rail[3].contains(at) {
+                    self.focus = 2;
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                if rail[0].contains(at) {
+                    self.runs.select(1);
+                } else if rail[1].contains(at) {
+                    self.move_sel(cx, 1);
+                } else if main.contains(at) {
+                    self.runs.scroll(3);
+                } else if log.contains(at) {
+                    self.log_scroll = self.log_scroll.saturating_sub(3);
+                }
+            }
+            MouseEventKind::ScrollUp => {
+                if rail[0].contains(at) {
+                    self.runs.select(-1);
+                } else if rail[1].contains(at) {
+                    self.move_sel(cx, -1);
+                } else if main.contains(at) {
+                    self.runs.scroll(-3);
+                } else if log.contains(at) {
+                    self.log_scroll = (self.log_scroll + 3).min(self.log_max_scroll);
+                }
+            }
+            _ => {}
+        }
+        Cmd::None
+    }
+
+    fn handle_filter_key(&mut self, cx: &mut Ctx, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => self.clear_filter(cx),
+            KeyCode::Enter => self.filtering = false,
+            KeyCode::Backspace => {
+                self.list_filter.pop();
+                self.snap_cursor(cx);
+            }
+            KeyCode::Char(c) => {
+                self.list_filter.push(c);
+                self.snap_cursor(cx);
+            }
+            _ => {}
+        }
+    }
+
+    fn clear_filter(&mut self, cx: &mut Ctx) {
+        self.filtering = false;
+        self.list_filter.clear();
+        self.snap_cursor(cx);
+    }
+
+    fn main_visible(&self, cx: &Ctx) -> usize {
+        (self.geometry(cx).1.height as usize).saturating_sub(2)
+    }
+
+    fn scroll_to_row(&mut self, main: Rect, row: u16) {
+        if main.height <= 2 {
+            return;
+        }
+        let visible = (main.height as usize).saturating_sub(2);
+        let top = main.y + 1;
+        let bottom = main.y + main.height - 2;
+        let rel = row.clamp(top, bottom).saturating_sub(top) as f64;
+        let frac = rel / (main.height - 2) as f64;
+        self.runs.click_scroll(frac, visible);
+    }
+
+    fn geometry(&self, cx: &Ctx) -> ([Rect; 4], Rect, Rect) {
+        let [body, _status] =
+            Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(cx.area);
+        if self.zoom {
+            return ([Rect::new(0, 0, 0, 0); 4], body, Rect::new(0, 0, 0, 0));
+        }
