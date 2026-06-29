@@ -406,3 +406,104 @@ impl Browse {
             return Cmd::Overlay(Overlay::ConfirmDelete(ConfirmDelete::profile(
                 p.name.clone(),
             )));
+        }
+        let ids: Vec<String> = if let Some((lo, hi)) = self.visual_range() {
+            match cx.active_profile() {
+                Some(p) => (lo..=hi)
+                    .filter_map(|i| p.tasks.get(i).map(|t| t.id.clone()))
+                    .collect(),
+                None => return Cmd::None,
+            }
+        } else {
+            self.select_task(cx);
+            match cx.active_task() {
+                Some(t) => vec![t.id.clone()],
+                None => return Cmd::None,
+            }
+        };
+        if ids.is_empty() {
+            return Cmd::None;
+        }
+        Cmd::Overlay(Overlay::ConfirmDelete(ConfirmDelete::tasks(ids)))
+    }
+
+    fn clear_filters(&mut self, cx: &mut Ctx) -> Cmd {
+        match cx.active_task() {
+            Some(t) if t.filters.is_empty() => Cmd::None,
+            Some(t) => Cmd::Overlay(Overlay::ConfirmClearFilters(ConfirmClearFilters::new(
+                t.id.clone(),
+            ))),
+            None => Cmd::None,
+        }
+    }
+
+    fn open_section(&mut self, cx: &mut Ctx, section: editor::Section) -> Cmd {
+        if cx.subtab != 0 {
+            return Cmd::None;
+        }
+        self.select_task(cx);
+        match cx.active_task().cloned() {
+            Some(t) => {
+                let taken = cx
+                    .active_profile()
+                    .map(|p| {
+                        p.tasks
+                            .iter()
+                            .filter(|o| o.id != t.id)
+                            .map(|o| o.id.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Cmd::Overlay(Overlay::Edit(Box::new(SectionEdit::new(t, section, taken))))
+            }
+            None => Cmd::None,
+        }
+    }
+
+    fn run_task(&mut self, cx: &mut Ctx) -> Cmd {
+        if let Some((lo, hi)) = self.visual_range() {
+            let Some(p) = cx.active_profile() else {
+                return Cmd::None;
+            };
+            let all: Vec<Task> = (lo..=hi).filter_map(|i| p.tasks.get(i).cloned()).collect();
+            return Self::request_run(all);
+        }
+        self.select_task(cx);
+        match cx.active_task().cloned() {
+            Some(t) => Self::request_run(vec![t]),
+            None => {
+                cx.push_log(LogKind::Warn, "no task to run");
+                Cmd::None
+            }
+        }
+    }
+
+    fn request_run(batch: Vec<Task>) -> Cmd {
+        match batch.len() {
+            0 => Cmd::None,
+            1 => Cmd::RequestRun(batch),
+            _ => Cmd::Overlay(Overlay::ConfirmRun(ConfirmRun::new(batch))),
+        }
+    }
+
+    fn run_all(&self, cx: &mut Ctx) -> Cmd {
+        let Some(p) = cx.active_profile() else {
+            return Cmd::None;
+        };
+        if p.tasks.is_empty() {
+            cx.push_log(LogKind::Warn, "profile has no tasks");
+            return Cmd::None;
+        }
+        Self::request_run(p.tasks.clone())
+    }
+
+    fn start_preview(&mut self, cx: &mut Ctx) {
+        self.select_task(cx);
+        let Some(t) = cx.active_task().cloned() else {
+            cx.push_log(LogKind::Warn, "no task to preview");
+            return;
+        };
+        self.runs.preview(t, cx);
+        self.focus = 3;
+    }
+}
