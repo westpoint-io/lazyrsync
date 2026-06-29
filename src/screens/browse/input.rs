@@ -304,3 +304,105 @@ impl Browse {
         if self.zoom {
             return ([Rect::new(0, 0, 0, 0); 4], body, Rect::new(0, 0, 0, 0));
         }
+        let [rail, right] =
+            Layout::horizontal([Constraint::Length(34), Constraint::Min(30)]).areas(body);
+        let rails = Layout::vertical(rail_constraints()).split(rail);
+        let [main, log] =
+            Layout::vertical([Constraint::Min(6), Constraint::Length(8)]).areas(right);
+        ([rails[0], rails[1], rails[2], rails[3]], main, log)
+    }
+
+    fn click_subtab(&self, cx: &mut Ctx, area: Rect, col: u16) -> bool {
+        let mut x = area.x + 1 + 4;
+        for (j, name) in SUBTABS.iter().enumerate() {
+            let w = name.chars().count() as u16;
+            if col >= x && col < x + w {
+                cx.subtab = j;
+                return true;
+            }
+            x += w + 3;
+        }
+        false
+    }
+
+    fn click_task_list(&mut self, cx: &mut Ctx, area: Rect, row: u16) {
+        let visible = (area.height as usize).saturating_sub(2);
+        let vis = self.visible_rows(cx);
+        let (cur, _) = self.panel_count(cx, 0);
+        let offset = (cur + 1).saturating_sub(visible);
+        let pos = row.saturating_sub(area.y + 1) as usize + offset;
+        if let Some(&real) = vis.get(pos) {
+            self.set_list_cursor(cx, real);
+        }
+    }
+
+    fn click_flag(&mut self, area: Rect, row: u16, col: u16) {
+        if row <= area.y {
+            return;
+        }
+        let rr = (row - area.y - 1) as usize;
+        let inner_w = (area.width as usize).saturating_sub(2);
+        let colw = (inner_w / 2).max(15);
+        let right = (col as usize) >= (area.x as usize + 1 + colw);
+        let n = rr * 2 + usize::from(right);
+        if n < editor::bool_flag_count() {
+            self.flag = n;
+        }
+    }
+
+    fn activate_profile(&mut self, cx: &mut Ctx) {
+        if self.runs.running() && cx.pcursor != cx.profile {
+            cx.push_log(
+                LogKind::Warn,
+                "can't switch profiles while a run is in progress",
+            );
+            cx.reject();
+            return;
+        }
+        cx.profile = cx.pcursor;
+        cx.task = 0;
+        self.tcursor = 0;
+        self.flag = 0;
+        self.filter = 0;
+        self.visual = None;
+    }
+
+    fn select_task(&mut self, cx: &mut Ctx) {
+        if cx.subtab != 0 || self.focus != 0 {
+            return;
+        }
+        self.visual = None;
+        if self.tcursor == 0 {
+            return;
+        }
+        if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
+            if self.tcursor < p.tasks.len() {
+                let t = p.tasks.remove(self.tcursor);
+                p.tasks.insert(0, t);
+                p.sort_tasks_by_recency();
+            }
+        }
+        self.tcursor = 0;
+        cx.task = 0;
+        let _ = cx.store.save();
+    }
+
+    fn add(&self, cx: &mut Ctx) -> Cmd {
+        if cx.subtab == 1 {
+            Cmd::Overlay(Overlay::Prompt(Prompt::new_profile(String::new())))
+        } else if cx.active_profile().is_some() {
+            Cmd::Overlay(Overlay::AddTask(AddTask::new()))
+        } else {
+            cx.push_log(LogKind::Warn, "add a profile first");
+            Cmd::None
+        }
+    }
+
+    fn delete(&mut self, cx: &mut Ctx) -> Cmd {
+        if cx.subtab == 1 {
+            let Some(p) = cx.store.profiles.get(cx.pcursor) else {
+                return Cmd::None;
+            };
+            return Cmd::Overlay(Overlay::ConfirmDelete(ConfirmDelete::profile(
+                p.name.clone(),
+            )));
