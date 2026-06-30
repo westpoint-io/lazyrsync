@@ -217,3 +217,221 @@ impl Runs {
                             crate::rsync::resolved_command(&self.jobs[i].task, true),
                         );
                     }
+                }
+            }
+            None => {
+                self.active = None;
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn tick(&mut self, cx: &mut Ctx) {
+        self.poll_search();
+        let Some(active) = self.active else {
+            return;
+        };
+        let mut run_msgs: Vec<RunMsg> = Vec::new();
+        let mut prev_msgs: Vec<PreviewMsg> = Vec::new();
+        match &self.handle {
+            Some(Active::Run(h)) => {
+                while let Ok(m) = h.rx.try_recv() {
+                    run_msgs.push(m);
+                }
+            }
+            Some(Active::Preview(h)) => {
+                while let Ok(m) = h.rx.try_recv() {
+                    prev_msgs.push(m);
+                }
+            }
+            None => return,
+        }
+        let mut finished: Option<i32> = None;
+        for msg in run_msgs {
+            match msg {
+                RunMsg::Progress(p) => self.jobs[active].progress = Some(p),
+                RunMsg::Line(l) => {
+                    let out = &mut self.jobs[active].output;
+                    out.push(l);
+                    if out.len() > 2000 {
+                        let n = out.len() - 2000;
+                        out.drain(0..n);
+                    }
+                }
+                RunMsg::Failed(e) => {
+                    self.jobs[active].output.push(format!("error: {e}"));
+                    finished = Some(-1);
+                }
+                RunMsg::Done { code } => finished = Some(code),
+            }
+        }
+        for msg in prev_msgs {
+            match msg {
+                PreviewMsg::Progress(mut p) => {
+                    p.percent = 0;
+                    p.bytes = 0;
+                    p.speed.clear();
+                    self.jobs[active].progress = Some(p);
+                }
+                PreviewMsg::Found(c) => {
+                    let sym = match c.kind {
+                        ChangeKind::Added => '+',
+                        ChangeKind::Modified => '~',
+                        ChangeKind::Deleted => '-',
+                    };
+                    let out = &mut self.jobs[active].output;
+                    out.push(format!("{sym} {}", c.path));
+                    if out.len() > 2000 {
+                        let n = out.len() - 2000;
+                        out.drain(0..n);
+                    }
+                }
+                PreviewMsg::Done(pv) => {
+                    self.jobs[active].counts = Some(change_counts(&pv));
+                    self.jobs[active].preview = Some(*pv);
+                    finished = Some(0);
+                }
+                PreviewMsg::Failed(code, e) => {
+                    self.jobs[active].output.push(format!("error: {e}"));
+                    finished = Some(code);
+                }
+            }
+        }
+        if let Some(code) = finished {
+            self.finish(active, code, cx);
+        }
+    }
+
+    fn finish(&mut self, active: usize, code: i32, cx: &mut Ctx) {
+        self.jobs[active].elapsed = self.jobs[active].started.elapsed().as_secs();
+        let label = self.jobs[active].label.clone();
+        let is_preview = self.jobs[active].kind == JobKind::Preview;
+        if self.cancelling {
+            self.jobs[active].status = JobStatus::Cancelled;
+            let verb = if is_preview { "Dry-run" } else { "Run" };
+            cx.push_log(LogKind::Warn, format!("{verb} Cancelled - {label}"));
+            self.drop_queued();
+            self.active = None;
+            self.handle = None;
+        } else if code == 0 {
+            self.jobs[active].status = JobStatus::Done(0);
+            if is_preview {
+                if let Some(pv) = &self.jobs[active].preview {
+                    let s = &pv.stats;
+                    cx.push_log(
+                        LogKind::Done,
+                        format!(
+                            "Dry-run Done - {label} - {} to transfer, {} new, {} deleted",
+                            s.transferred, s.created, s.deleted
+                        ),
+                    );
+                }
+            } else {
+                cx.push_log(LogKind::Done, format!("Run Done - {label}"));
+            }
+            let total = if is_preview {
+                self.jobs[active].preview.as_ref().map(|pv| pv.stats.files)
+            } else {
+                self.jobs[active]
+                    .progress
+                    .as_ref()
+                    .filter(|p| p.files_final)
+                    .map(|p| p.files_total)
+            };
+            if let Some(total) = total.filter(|t| *t > 0) {
+                self.remember_total(active, total, cx);
+            }
+            self.start_next(cx);
+        } else if is_preview {
+            self.jobs[active].status = JobStatus::Done(code);
+            cx.push_log(LogKind::Error, format!("Dry-run Failed - {label}"));
+            self.start_next(cx);
+        } else {
+            self.jobs[active].status = JobStatus::Done(code);
+            self.jobs[active]
+                .output
+                .push(format!("✗ rsync exited with code {code}"));
+            cx.push_log(
+                LogKind::Error,
+                format!("Run Failed - {label} - exit {code}"),
+            );
+            self.start_next(cx);
+        }
+        if let Some(a) = self.active {
+            self.sel = a;
+        }
+    }
+
+    fn remember_total(&mut self, job_idx: usize, total: u64, cx: &mut Ctx) {
+        let (id, source, dest) = {
+            let t = &self.jobs[job_idx].task;
+            (t.id.clone(), t.source.clone(), t.dest.clone())
+        };
+        let mut changed = false;
+        for p in &mut cx.store.profiles {
+            for t in &mut p.tasks {
+                if t.id == id && t.source == source && t.dest == dest {
+                    changed |= t.last_files != Some(total);
+                    t.last_files = Some(total);
+                }
+            }
+        }
+        for j in &mut self.jobs {
+            if j.task.id == id && j.task.source == source && j.task.dest == dest {
+                j.task.last_files = Some(total);
+            }
+        }
+        if changed {
+            let _ = cx.store.save();
+        }
+    }
+
+    fn drop_queued(&mut self) {
+        for j in &mut self.jobs {
+            if matches!(j.status, JobStatus::Queued) {
+                j.status = JobStatus::Cancelled;
+            }
+        }
+    }
+
+    pub fn select(&mut self, delta: i32) {
+        if self.jobs.is_empty() {
+            return;
+        }
+        let n = self.jobs.len() as i32;
+        self.sel = (self.sel as i32 + delta).rem_euclid(n) as usize;
+        self.scroll = 0;
+        self.exit_search();
+    }
+
+    pub fn scroll(&mut self, delta: i32) {
+        let max = self.content_len() as i32;
+        self.scroll = (self.scroll as i32 + delta).clamp(0, max) as usize;
+    }
+
+    fn preview_done(&self) -> bool {
+        self.sel_job()
+            .is_some_and(|j| j.kind == JobKind::Preview && matches!(j.status, JobStatus::Done(0)))
+    }
+
+    fn content_len(&self) -> usize {
+        let Some(job) = self.sel_job() else { return 0 };
+        if self.preview_done() {
+            job.preview.as_ref().map_or(0, |p| p.changes.len())
+        } else {
+            job.output.len()
+        }
+    }
+
+    pub fn overflow(&self, visible: usize) -> Option<(usize, usize)> {
+        let total = self.content_len();
+        if total <= visible {
+            return None;
+        }
+        let top = if self.preview_done() {
+            self.scroll.min(total - visible)
+        } else {
+            total.saturating_sub(visible + self.scroll)
+        };
+        Some((total, top))
+    }
