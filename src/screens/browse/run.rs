@@ -655,3 +655,223 @@ impl Runs {
         let name = trunc(&job.label, 18);
         match &job.status {
             JobStatus::Cancelled => Line::from(vec![
+                "✗ ".fg(warn()),
+                name.into(),
+                " [CANCELLED]".fg(warn()),
+            ]),
+            JobStatus::Done(c) if *c != 0 => Line::from(vec![
+                "✗ ".fg(deleted()),
+                name.into(),
+                " [FAILED]".fg(deleted()),
+            ]),
+            JobStatus::Queued => Line::from(vec![
+                "⏸ ".fg(Color::Reset),
+                name.into(),
+                " [QUEUED]".fg(Color::Reset),
+            ]),
+            JobStatus::Active => {
+                let sp = SPINNER[cx.tick % SPINNER.len()];
+                let tail = match job.active_pct() {
+                    Some((pct, true)) => format!("{pct}%").fg(added()),
+                    Some((pct, false)) => format!("~{pct}%").fg(added()),
+                    None => "--%".fg(Color::Reset),
+                };
+                Line::from(vec![
+                    format!("{sp} ").fg(accent()),
+                    format!("{name} · ").into(),
+                    tail,
+                ])
+            }
+            JobStatus::Done(_) => match job.kind {
+                JobKind::Real => {
+                    Line::from(vec!["✓ ".fg(added()), name.into(), " [DONE]".fg(added())])
+                }
+                JobKind::Preview => {
+                    let (a, m, d) = job.counts.unwrap_or((0, 0, 0));
+                    Line::from(vec![
+                        "✓ ".fg(added()),
+                        format!("{name}  ").into(),
+                        format!("+{}", compact(a)).fg(added()),
+                        format!(" ~{}", compact(m)).fg(modified()),
+                        format!(" -{}", compact(d)).fg(deleted()),
+                    ])
+                }
+            },
+        }
+    }
+
+    pub fn main_text(&self, cx: &Ctx, visible: usize) -> Text<'static> {
+        let Some(job) = self.sel_job() else {
+            return Text::from(vec![
+                Line::from("No runs yet".fg(Color::Reset)),
+                Line::from(""),
+                Line::from("Press r to run · p to preview".fg(Color::Reset)),
+            ]);
+        };
+        let q = self.search_on.then(|| self.search.to_lowercase());
+        if self.preview_done() {
+            return match &job.preview {
+                Some(pv) => preview_text(pv, self.scroll, visible, q.as_deref(), self.match_line),
+                None => Text::from(dropped_preview_summary(job)),
+            };
+        }
+        if let JobStatus::Done(code) = &job.status {
+            let code = *code;
+            return Text::from(if code == 0 {
+                let transferred = job
+                    .progress
+                    .as_ref()
+                    .is_some_and(|p| p.percent > 0 || p.bytes > 0);
+                done_summary(job, transferred)
+            } else {
+                failed_summary(job, code)
+            });
+        }
+        let mut lines = Vec::new();
+        match &job.status {
+            JobStatus::Active => lines.push(active_line(job, cx)),
+            JobStatus::Done(0) => lines.push(Line::from(
+                format!("   ✓ done · {}", fmt_dur(job.elapsed)).fg(added()),
+            )),
+            JobStatus::Done(c) => {
+                lines.push(Line::from(format!("   ✗ failed · exit {c}").fg(deleted())))
+            }
+            JobStatus::Cancelled => match progress_line(job, cx, job.elapsed, true) {
+                Some(l) => lines.push(l),
+                None => lines.push(Line::from("   Cancelled".fg(warn()))),
+            },
+            JobStatus::Queued => lines.push(Line::from(
+                "   Queued — waiting for the active run".fg(Color::Reset),
+            )),
+        }
+        let out = &job.output;
+        if out.is_empty() && job.kind == JobKind::Preview && matches!(job.status, JobStatus::Active)
+        {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                "   ⚑ ".fg(accent()),
+                "No changes found yet".fg(Color::Reset),
+            ]));
+        }
+        let room = visible.saturating_sub(lines.len()).max(1);
+        let start = out.len().saturating_sub(room).saturating_sub(self.scroll);
+        let end = (start + room).min(out.len());
+        for (j, l) in out[start..end].iter().enumerate() {
+            let i = start + j;
+            let base = line_style(l);
+            let mut spans = vec![Span::raw("   ")];
+            match &q {
+                Some(ql) => spans.extend(crate::ui::highlight_spans(
+                    l,
+                    base,
+                    ql,
+                    self.match_line == Some(i),
+                )),
+                None => spans.push(Span::styled(l.clone(), base)),
+            }
+            lines.push(Line::from(spans));
+        }
+        Text::from(lines)
+    }
+}
+
+fn active_line(job: &Job, cx: &Ctx) -> Line<'static> {
+    progress_line(job, cx, job.started.elapsed().as_secs(), false).unwrap_or_else(|| {
+        let sp = SPINNER[cx.tick % SPINNER.len()];
+        Line::from(format!("   {sp} Scanning…").fg(Color::Reset))
+    })
+}
+
+fn progress_line(job: &Job, cx: &Ctx, elapsed: u64, frozen: bool) -> Option<Line<'static>> {
+    match job.active_pct() {
+        Some((pct, exact)) => {
+            let p = job.progress.as_ref().expect("active_pct implies progress");
+            let mut spans = bar(pct as f64 / 100.0, 24);
+            let mark = if exact { "" } else { "~" };
+            spans.push(format!(" {mark}{pct}%").fg(added()));
+            if (p.percent > 0 || p.bytes > 0) && !p.speed.is_empty() {
+                spans.push(format!("  {}", p.speed).fg(bytes()));
+            } else if p.files_final && p.files_total > 0 {
+                spans.push(
+                    format!(
+                        "  checked {}/{}",
+                        commas(p.files_done),
+                        commas(p.files_total)
+                    )
+                    .fg(Color::Reset),
+                );
+            } else if p.files_done > 0 {
+                spans.push(format!("  checked {}", commas(p.files_done)).fg(Color::Reset));
+            }
+            spans.push("  elapsed ".fg(Color::Reset));
+            spans.push(fmt_dur(elapsed).fg(Color::Reset));
+            if p.bytes > 0 {
+                spans.push(format!("  {}", human_bytes(p.bytes)).fg(bytes()));
+            }
+            spans.insert(0, Span::raw("   "));
+            Some(Line::from(spans))
+        }
+        None => {
+            let p = job.progress.as_ref()?;
+            if p.files_done == 0 {
+                return None;
+            }
+            let mut spans = if frozen {
+                bar(0.0, 24)
+            } else {
+                pulse(24, cx.tick)
+            };
+            spans.push(format!("  checked {} files", commas(p.files_done)).fg(Color::Reset));
+            spans.push("  elapsed ".fg(Color::Reset));
+            spans.push(fmt_dur(elapsed).fg(Color::Reset));
+            spans.insert(0, Span::raw("   "));
+            Some(Line::from(spans))
+        }
+    }
+}
+
+fn rule_head(text: &str, color: Color, right: &str) -> Line<'static> {
+    Line::from(vec![
+        " ".into(),
+        text.to_string().fg(color).bold(),
+        "   ".into(),
+        right.to_string().fg(secondary()),
+    ])
+}
+
+fn divider() -> Line<'static> {
+    Line::from(format!(" {}", "─".repeat(56)).fg(muted()))
+}
+
+#[derive(Default)]
+struct Trailer {
+    sent: String,
+    received: String,
+    rate: String,
+    total: String,
+}
+
+fn parse_trailer(output: &[String]) -> Trailer {
+    let mut t = Trailer::default();
+    for l in output {
+        let w: Vec<&str> = l.split_whitespace().collect();
+        if l.starts_with("sent ") && l.contains("bytes/sec") {
+            if let Some(i) = w.iter().position(|x| *x == "sent") {
+                t.sent = w.get(i + 1).unwrap_or(&"").to_string();
+            }
+            if let Some(i) = w.iter().position(|x| *x == "received") {
+                t.received = w.get(i + 1).unwrap_or(&"").to_string();
+            }
+            if let Some(i) = w.iter().position(|x| *x == "bytes/sec") {
+                if i > 0 {
+                    t.rate = w[i - 1].to_string();
+                }
+            }
+        } else if l.starts_with("total size is") {
+            if let Some(i) = w.iter().position(|x| *x == "is") {
+                t.total = w.get(i + 1).unwrap_or(&"").to_string();
+            }
+        }
+    }
+    t
+}
