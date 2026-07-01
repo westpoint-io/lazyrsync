@@ -435,3 +435,223 @@ impl Runs {
         };
         Some((total, top))
     }
+
+    pub fn click_scroll(&mut self, frac: f64, visible: usize) {
+        let max = self.content_len().saturating_sub(visible);
+        let top = (frac.clamp(0.0, 1.0) * max as f64).round() as usize;
+        self.scroll = if self.preview_done() { top } else { max - top };
+    }
+
+    fn scroll_to(&mut self, line: usize, visible: usize) {
+        let max = self.content_len().saturating_sub(visible);
+        let top = line.min(max);
+        self.scroll = if self.preview_done() { top } else { max - top };
+    }
+
+    fn scan_matches(&self) -> Vec<usize> {
+        let q = self.search.to_lowercase();
+        if q.is_empty() {
+            return Vec::new();
+        }
+        let Some(job) = self.sel_job() else {
+            return Vec::new();
+        };
+        if self.preview_done() {
+            job.preview.as_ref().map_or(Vec::new(), |p| {
+                p.changes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| contains_ci(&c.path, &q))
+                    .map(|(i, _)| i)
+                    .collect()
+            })
+        } else {
+            job.output
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| contains_ci(l, &q))
+                .map(|(i, _)| i)
+                .collect()
+        }
+    }
+
+    pub fn searching(&self) -> bool {
+        self.searching
+    }
+
+    pub fn search_on(&self) -> bool {
+        self.search_on
+    }
+
+    pub fn scanning(&self) -> bool {
+        self.search_handle.is_some()
+    }
+
+    pub fn search_query(&self) -> &str {
+        &self.search
+    }
+
+    fn poll_search(&mut self) {
+        let done = self
+            .search_handle
+            .as_ref()
+            .and_then(|h| h.rx.try_recv().ok());
+        if let Some(matches) = done {
+            self.matches = matches;
+            self.match_line = self.matches.first().copied();
+            self.search_handle = None;
+            if let Some(l) = self.match_line {
+                self.scroll_to(l, self.search_visible);
+            }
+        }
+    }
+
+    pub fn match_pos(&self) -> (usize, usize) {
+        let pos = self
+            .match_line
+            .and_then(|l| self.matches.iter().position(|&i| i == l))
+            .map_or(0, |p| p + 1);
+        (pos, self.matches.len())
+    }
+
+    pub fn start_search(&mut self) {
+        self.searching = true;
+        self.search.clear();
+        self.search_on = false;
+        self.match_line = None;
+        self.matches.clear();
+        self.search_handle = None;
+    }
+
+    pub fn exit_search(&mut self) {
+        self.searching = false;
+        self.search_on = false;
+        self.search.clear();
+        self.match_line = None;
+        self.matches.clear();
+        self.search_handle = None;
+    }
+
+    pub fn search_key(&mut self, key: KeyEvent, visible: usize) {
+        match key.code {
+            KeyCode::Esc => self.exit_search(),
+            KeyCode::Enter => {
+                self.searching = false;
+                self.search_on = true;
+                self.match_line = None;
+                self.matches.clear();
+                self.search_visible = visible;
+                let q = self.search.to_lowercase();
+                let changes = self
+                    .preview_done()
+                    .then(|| self.sel_job().and_then(|j| j.preview.as_ref()))
+                    .flatten()
+                    .map(|pv| pv.changes.clone());
+                match changes {
+                    Some(changes) if changes.len() > SYNC_SCAN_LIMIT => {
+                        self.search_handle = Some(spawn_search(changes, q));
+                    }
+                    Some(changes) => {
+                        self.matches = changes
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, c)| contains_ci(&c.path, &q))
+                            .map(|(i, _)| i)
+                            .collect();
+                        self.match_line = self.matches.first().copied();
+                        if let Some(l) = self.match_line {
+                            self.scroll_to(l, visible);
+                        }
+                    }
+                    None => {
+                        self.matches = self.scan_matches();
+                        self.match_line = self.matches.first().copied();
+                        if let Some(l) = self.match_line {
+                            self.scroll_to(l, visible);
+                        }
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                self.search.pop();
+            }
+            KeyCode::Char(c) => self.search.push(c),
+            _ => {}
+        }
+    }
+
+    pub fn next_match(&mut self, visible: usize, delta: i32) {
+        if self.matches.is_empty() {
+            return;
+        }
+        let cur = self
+            .match_line
+            .and_then(|l| self.matches.iter().position(|&i| i == l));
+        let n = self.matches.len() as i32;
+        let next = match cur {
+            Some(p) => (p as i32 + delta).rem_euclid(n) as usize,
+            None => 0,
+        };
+        self.match_line = Some(self.matches[next]);
+        self.scroll_to(self.matches[next], visible);
+    }
+
+    fn sel_job(&self) -> Option<&Job> {
+        self.jobs.get(self.sel)
+    }
+
+    pub fn cancel(&mut self) {
+        if self.active.is_none() {
+            return;
+        }
+        self.cancelling = true;
+        match &self.handle {
+            Some(Active::Run(h)) => h.cancel(),
+            Some(Active::Preview(h)) => h.cancel(),
+            None => {}
+        }
+    }
+
+    pub fn sel_mode(&self) -> Option<(&'static str, ratatui::style::Color)> {
+        let j = self.sel_job()?;
+        match j.kind {
+            JobKind::Preview => Some(("DRY-RUN", accent())),
+            JobKind::Real => {
+                let transferred = j
+                    .progress
+                    .as_ref()
+                    .is_some_and(|p| p.percent > 0 || p.bytes > 0);
+                if transferred {
+                    Some(("TRANSFER", added()))
+                } else {
+                    Some(("CHECK", warn()))
+                }
+            }
+        }
+    }
+
+    pub fn position(&self) -> Option<(usize, usize)> {
+        if self.jobs.is_empty() {
+            None
+        } else {
+            Some((self.sel + 1, self.jobs.len()))
+        }
+    }
+
+    pub fn sel_label(&self) -> Option<String> {
+        self.sel_job().map(|j| j.label.clone())
+    }
+
+    pub fn rail_line(&self, cx: &Ctx) -> Line<'static> {
+        let mut line = self.rail_line_body(cx);
+        line.spans.insert(0, " ".into());
+        line
+    }
+
+    fn rail_line_body(&self, cx: &Ctx) -> Line<'static> {
+        let Some(job) = self.sel_job() else {
+            return Line::from("No runs yet".fg(Color::Reset));
+        };
+        let name = trunc(&job.label, 18);
+        match &job.status {
+            JobStatus::Cancelled => Line::from(vec![
