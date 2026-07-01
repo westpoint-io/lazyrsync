@@ -875,3 +875,220 @@ fn parse_trailer(output: &[String]) -> Trailer {
     }
     t
 }
+
+fn done_summary(job: &Job, transferred: bool) -> Vec<Line<'static>> {
+    let elapsed = fmt_dur(job.elapsed);
+    if !transferred {
+        let checked = job
+            .progress
+            .as_ref()
+            .filter(|p| p.files_final && p.files_total > 0)
+            .map(|p| format!(" · {} files checked", commas(p.files_total)))
+            .unwrap_or_default();
+        return vec![
+            rule_head("✓ ALREADY IN SYNC", added(), &elapsed),
+            divider(),
+            Line::from(format!("   Nothing to transfer{checked}").fg(Color::Reset)),
+        ];
+    }
+    let t = parse_trailer(&job.output);
+    let mut parts: Vec<String> = Vec::new();
+    if !t.sent.is_empty() {
+        parts.push(format!("{} sent", t.sent));
+    }
+    if !t.received.is_empty() {
+        parts.push(format!("{} recv", t.received));
+    }
+    if !t.rate.is_empty() {
+        parts.push(format!("{}/s", t.rate));
+    }
+    if !t.total.is_empty() {
+        parts.push(format!("{} total", t.total));
+    }
+    let mut stats: Vec<Span<'static>> = vec!["   ".into()];
+    for (i, p) in parts.into_iter().enumerate() {
+        if i > 0 {
+            stats.push("   ".fg(muted()));
+        }
+        stats.push(p.fg(bytes()));
+    }
+    vec![
+        rule_head("✓ TRANSFER COMPLETE", added(), &elapsed),
+        divider(),
+        Line::from(stats),
+    ]
+}
+
+fn failed_summary(job: &Job, code: i32) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        rule_head(
+            "✗ FAILED",
+            deleted(),
+            &format!("exit {code} · {}", fmt_dur(job.elapsed)),
+        ),
+        divider(),
+    ];
+    if let Some(err) = job
+        .output
+        .iter()
+        .rev()
+        .find(|l| l.contains("rsync:") || l.starts_with("error"))
+    {
+        lines.push(Line::from(format!("   {}", err.trim()).fg(Color::Reset)));
+    }
+    lines
+}
+
+fn dropped_preview_summary(job: &Job) -> Vec<Line<'static>> {
+    let (a, m, d) = job.counts.unwrap_or((0, 0, 0));
+    vec![
+        rule_head("✓ DRY-RUN COMPLETE", accent(), &fmt_dur(job.elapsed)),
+        divider(),
+        Line::from(vec![
+            "   ".into(),
+            format!("+{} new", commas(a as u64)).fg(added()),
+            "   ".into(),
+            format!("~{} changed", commas(m as u64)).fg(modified()),
+            "   ".into(),
+            format!("-{} deleted", commas(d as u64)).fg(deleted()),
+        ]),
+        Line::from(""),
+        Line::from("   Diff freed to save memory — press p to re-run it.".fg(muted())),
+    ]
+}
+
+fn change_counts(pv: &Preview) -> (usize, usize, usize) {
+    let mut a = 0;
+    let mut m = 0;
+    let mut d = 0;
+    for c in pv.changes.iter() {
+        match c.kind {
+            ChangeKind::Added => a += 1,
+            ChangeKind::Modified => m += 1,
+            ChangeKind::Deleted => d += 1,
+        }
+    }
+    (a, m, d)
+}
+
+fn trunc(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max - 1).collect();
+        out.push('…');
+        out
+    }
+}
+
+fn fmt_dur(secs: u64) -> String {
+    format!("{}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+}
+
+fn contains_ci(haystack: &str, needle_lower: &str) -> bool {
+    if needle_lower.is_empty() {
+        return true;
+    }
+    let (h, n) = (haystack.as_bytes(), needle_lower.as_bytes());
+    if n.len() > h.len() {
+        return false;
+    }
+    (0..=h.len() - n.len()).any(|i| {
+        h[i..i + n.len()]
+            .iter()
+            .zip(n)
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
+fn compact(n: usize) -> String {
+    match n {
+        0..=999 => n.to_string(),
+        1_000..=999_999 => format!("{:.1}K", n as f64 / 1_000.0),
+        _ => format!("{:.1}M", n as f64 / 1_000_000.0),
+    }
+}
+
+fn commas(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn bar(ratio: f64, width: usize) -> Vec<Span<'static>> {
+    let ticks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+    let t8 = (ratio.clamp(0.0, 1.0) * width as f64 * 8.0).round() as usize;
+    let whole = (t8 / 8).min(width);
+    let rem = t8 % 8;
+    let part = if rem > 0 && whole < width {
+        ticks[rem].to_string()
+    } else {
+        String::new()
+    };
+    let filled = format!("{}{}", "█".repeat(whole), part);
+    let fw = whole + part.chars().count();
+    let unfilled = "░".repeat(width.saturating_sub(fw));
+    vec![filled.fg(accent()), unfilled.fg(muted())]
+}
+
+fn pulse(width: usize, tick: usize) -> Vec<Span<'static>> {
+    let seg = 3.min(width);
+    let span = width.saturating_sub(seg);
+    let pos = if span == 0 {
+        0
+    } else {
+        let p = tick % (span * 2);
+        if p <= span {
+            p
+        } else {
+            span * 2 - p
+        }
+    };
+    let left = "░".repeat(pos);
+    let mid = "█".repeat(seg);
+    let right = "░".repeat(width - pos - seg);
+    vec![left.fg(muted()), mid.fg(accent()), right.fg(muted())]
+}
+
+fn line_style(l: &str) -> Style {
+    if l.starts_with("+ ") {
+        return Style::new().fg(added());
+    }
+    if l.starts_with("~ ") {
+        return Style::new().fg(modified());
+    }
+    if l.starts_with("- ") {
+        return Style::new().fg(deleted());
+    }
+    let low = l.to_lowercase();
+    if l.starts_with('✗')
+        || low.contains("rsync error")
+        || low.starts_with("rsync:")
+        || low.starts_with("error")
+    {
+        Style::new().fg(deleted())
+    } else {
+        Style::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_ci;
+
+    #[test]
+    fn contains_ci_matches_case_insensitively() {
+        assert!(contains_ci("photos/.git/HEAD", "photos"));
+        assert!(contains_ci("Photos/README", "photos"));
+        assert!(contains_ci("path/to/PHOTOS", "photos"));
+        assert!(contains_ci("anything", ""));
+        assert!(!contains_ci("node_modules", "photos"));
+        assert!(!contains_ci("cook", "photos"));
+    }
+}
