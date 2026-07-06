@@ -256,3 +256,259 @@ impl AddTask {
             src_badge = Some("required".to_string());
         }
         field_box(
+            frame,
+            rows[2],
+            "Source",
+            self.row == 2,
+            Line::from(format!(" {}", self.source)),
+            src_badge,
+            Some(src_color),
+            cur(2),
+        );
+        let (mut dst_color, mut dst_badge) = field_status(&self.dest, self.row == 3, true);
+        if self.attempted && self.dest.trim().is_empty() {
+            dst_color = deleted();
+            dst_badge = Some("required".to_string());
+        }
+        field_box(
+            frame,
+            rows[3],
+            "Destination",
+            self.row == 3,
+            Line::from(format!(" {}", self.dest)),
+            dst_badge,
+            Some(dst_color),
+            cur(3),
+        );
+
+        let preview = self.preview_task();
+        let mut cmd = vec![Span::raw(" → ").dim()];
+        cmd.push(Span::raw(rsync::resolved_command(&preview, false)));
+        frame.render_widget(
+            Paragraph::new(Line::from(cmd))
+                .wrap(Wrap { trim: false })
+                .block(
+                    Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::new().fg(accent()))
+                        .title(Span::raw(" command ").dim()),
+                ),
+            rows[4],
+        );
+    }
+
+    pub fn on_key(&mut self, key: KeyEvent, cx: &mut Ctx) -> Cmd {
+        match key.code {
+            KeyCode::Esc => Cmd::Close,
+            KeyCode::Down | KeyCode::Tab => {
+                self.row = (self.row + 1) % 4;
+                self.cursor_to_end();
+                Cmd::None
+            }
+            KeyCode::Up | KeyCode::BackTab => {
+                self.row = (self.row + 3) % 4;
+                self.cursor_to_end();
+                Cmd::None
+            }
+            KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l')
+                if self.row == 1 =>
+            {
+                self.action = self.action.next();
+                Cmd::None
+            }
+            KeyCode::Left | KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor = self.prev_word();
+                Cmd::None
+            }
+            KeyCode::Right | KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor = self.next_word();
+                Cmd::None
+            }
+            KeyCode::Left => {
+                self.cursor = self.cursor.saturating_sub(1);
+                Cmd::None
+            }
+            KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = self.cursor.saturating_sub(1);
+                Cmd::None
+            }
+            KeyCode::Right => {
+                self.cursor = (self.cursor + 1).min(self.text_len());
+                Cmd::None
+            }
+            KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = (self.cursor + 1).min(self.text_len());
+                Cmd::None
+            }
+            KeyCode::Home => {
+                self.cursor = 0;
+                Cmd::None
+            }
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor = 0;
+                Cmd::None
+            }
+            KeyCode::End => {
+                self.cursor_to_end();
+                Cmd::None
+            }
+            KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_to_end();
+                Cmd::None
+            }
+            KeyCode::Delete => {
+                self.delete_forward();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_forward();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_to_start();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_to_end();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.row == 2 || self.row == 3 {
+                    if let Some(b) = self.text_mut() {
+                        *b = crate::paths::complete_path(b);
+                    }
+                    self.cursor_to_end();
+                }
+                Cmd::None
+            }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.delete_word();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Backspace if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.delete_word();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Backspace => {
+                self.backspace();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.backspace();
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                let at = self.cursor;
+                let mut inserted = false;
+                if let Some(b) = self.text_mut() {
+                    let byte = Self::byte_at(b, at);
+                    b.insert(byte, c);
+                    inserted = true;
+                }
+                if inserted {
+                    self.cursor += 1;
+                }
+                self.clear_errors();
+                Cmd::None
+            }
+            KeyCode::Enter => self.submit(cx),
+            _ => Cmd::None,
+        }
+    }
+
+    pub fn on_mouse(&mut self, m: MouseEvent, cx: &mut Ctx) -> Cmd {
+        match m.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let footer_h = if cx.settings.hints { 2 } else { 0 };
+                let region = centered(cx.area, WIDTH, BOX_H + footer_h);
+                let inside =
+                    m.column >= region.x && m.column < region.x + region.width && m.row >= region.y;
+                if inside {
+                    let idx = ((m.row - region.y) / 3) as usize;
+                    if idx < ROWS {
+                        self.row = idx;
+                        self.cursor_to_end();
+                        self.clear_errors();
+                    }
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                self.row = (self.row + 1) % ROWS;
+                self.cursor_to_end();
+            }
+            MouseEventKind::ScrollUp => {
+                self.row = (self.row + ROWS - 1) % ROWS;
+                self.cursor_to_end();
+            }
+            _ => {}
+        }
+        Cmd::None
+    }
+
+    fn clear_errors(&mut self) {
+        self.id_taken = false;
+        self.attempted = false;
+    }
+
+    fn submit(&mut self, cx: &mut Ctx) -> Cmd {
+        let source = self.source.trim().to_string();
+        let dest = self.dest.trim().to_string();
+        let typed = self.label.trim().to_string();
+        let mut task = self.preview_task();
+
+        if source.is_empty() || dest.is_empty() {
+            self.attempted = true;
+            cx.reject();
+            return Cmd::None;
+        }
+
+        let existing: Vec<String> = cx
+            .store
+            .profiles
+            .get(cx.profile)
+            .map(|p| p.tasks.iter().map(|t| t.id.clone()).collect())
+            .unwrap_or_default();
+        let taken = |id: &str| existing.iter().any(|e| e == id);
+
+        let id = if typed.is_empty() {
+            let base = task.candidate_id();
+            let mut cand = base.clone();
+            let mut n = 2;
+            while taken(&cand) {
+                cand = format!("{base}-{n}");
+                n += 1;
+            }
+            cand
+        } else if taken(&typed) {
+            self.id_taken = true;
+            cx.reject();
+            return Cmd::None;
+        } else {
+            typed
+        };
+
+        task.id = id.clone();
+        task.label = id.clone();
+        task.created = Some(now_unix());
+        if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
+            p.tasks.insert(0, task);
+            p.sort_tasks_by_recency();
+            cx.task = 0;
+        }
+        cx.subtab = 0;
+        cx.save(&format!("added task '{id}'"));
+        Cmd::Close
+    }
+}
