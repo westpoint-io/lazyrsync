@@ -8,6 +8,10 @@
   <a href="https://lazyrsync.westpoint.io"><img src="https://img.shields.io/badge/docs-lazyrsync.westpoint.io-1f6feb" alt="Docs"></a>
 </p>
 
+<p align="center">
+  <img src="assets/demo.gif" alt="lazyrsync demo" width="800">
+</p>
+
 A terminal UI for `rsync` — manage reusable profiles, preview a transfer as a
 structured diff **before** running it, and watch a live run with progress and
 cancellation. All from the terminal, including over SSH where a desktop GUI
