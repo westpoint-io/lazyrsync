@@ -1,17 +1,16 @@
 # lazyrsync
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange?logo=rust)](https://www.rust-lang.org/)
-[![TUI: ratatui](https://img.shields.io/badge/TUI-ratatui-1f6feb)](https://ratatui.rs)
-[![Docs](https://img.shields.io/badge/docs-lazyrsync.westpoint.io-1f6feb)](https://lazyrsync.westpoint.io)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/built%20with-Rust-orange?logo=rust" alt="Built with Rust"></a>
+  <a href="https://ratatui.rs"><img src="https://img.shields.io/badge/TUI-ratatui-1f6feb" alt="TUI: ratatui"></a>
+  <a href="https://lazyrsync.westpoint.io"><img src="https://img.shields.io/badge/docs-lazyrsync.westpoint.io-1f6feb" alt="Docs"></a>
+</p>
 
 A terminal UI for `rsync` — manage reusable profiles, preview a transfer as a
 structured diff **before** running it, and watch a live run with progress and
 cancellation. All from the terminal, including over SSH where a desktop GUI
 can't reach.
-
-> **Demo:** _coming soon_ — a recording will live at `assets/demo.gif`.
-<!-- ![lazyrsync demo](assets/demo.gif) -->
 
 ## Contents
 
