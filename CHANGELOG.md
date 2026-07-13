@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-13
+
+### Changed
+
+- Feature GIFs are committed in the repo and referenced relatively, so they
+  render on both GitHub and the crates.io page.
+
 ## [0.1.0] - 2026-07-10
 
 ### Added
@@ -14,5 +21,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dry-run diff preview, live run progress with cancellation, a filters/flags
   editor, SSH remotes (`user@host:/path`), and local snapshots.
 
-[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/westpoint-io/lazyrsync/releases/tag/v0.1.0
