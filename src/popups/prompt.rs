@@ -256,9 +256,10 @@ impl Prompt {
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0),
                 );
-                cx.store.profiles.push(p);
-                cx.profile = cx.store.profiles.len() - 1;
-                cx.pcursor = cx.profile;
+                cx.store.profiles.insert(0, p);
+                cx.store.sort_profiles_by_recency();
+                cx.profile = 0;
+                cx.pcursor = 0;
                 cx.task = 0;
                 cx.subtab = 1;
                 cx.save("added profile");

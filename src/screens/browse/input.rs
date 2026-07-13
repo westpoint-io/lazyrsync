@@ -359,7 +359,14 @@ impl Browse {
             cx.reject();
             return;
         }
-        cx.profile = cx.pcursor;
+        if cx.pcursor < cx.store.profiles.len() {
+            let p = cx.store.profiles.remove(cx.pcursor);
+            cx.store.profiles.insert(0, p);
+            cx.store.sort_profiles_by_recency();
+            let _ = cx.store.save();
+        }
+        cx.profile = 0;
+        cx.pcursor = 0;
         cx.task = 0;
         self.tcursor = 0;
         self.flag = 0;

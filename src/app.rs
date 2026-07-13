@@ -181,12 +181,17 @@ impl App {
     pub fn new() -> anyhow::Result<Self> {
         let settings = Settings::load();
         crate::ui::apply_theme(&settings.theme);
-        let store = Store::load()?;
-        let profile = store
+        let mut store = Store::load()?;
+        let active = store
             .profiles
             .iter()
             .position(|p| p.name == settings.last_profile)
             .unwrap_or(0);
+        if active < store.profiles.len() {
+            let p = store.profiles.remove(active);
+            store.profiles.insert(0, p);
+            store.sort_profiles_by_recency();
+        }
         Ok(Self {
             ctx: Ctx {
                 store,
@@ -195,8 +200,8 @@ impl App {
                 area: Rect::new(0, 0, 0, 0),
                 tick: 0,
                 shake: 0,
-                profile,
-                pcursor: profile,
+                profile: 0,
+                pcursor: 0,
                 task: 0,
                 subtab: 0,
             },

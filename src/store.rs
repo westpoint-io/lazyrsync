@@ -216,6 +216,13 @@ impl Store {
         base.join("lazyrsync").join("profiles.toml")
     }
 
+    pub fn sort_profiles_by_recency(&mut self) {
+        if self.profiles.len() < 2 {
+            return;
+        }
+        self.profiles[1..].sort_by(|a, b| b.created.cmp(&a.created));
+    }
+
     pub fn load() -> Result<Self> {
         let global_path = Self::global_path();
         let mut profiles = read_file(&global_path)?;
