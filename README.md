@@ -1,6 +1,7 @@
-# lazyrsync
+<h1 align="center">lazyrsync</h1>
 
 <p align="center">
+  <a href="https://crates.io/crates/lazyrsync"><img src="https://img.shields.io/crates/v/lazyrsync.svg" alt="crates.io"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/built%20with-Rust-orange?logo=rust" alt="Built with Rust"></a>
   <a href="https://ratatui.rs"><img src="https://img.shields.io/badge/TUI-ratatui-1f6feb" alt="TUI: ratatui"></a>
