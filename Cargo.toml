@@ -10,7 +10,7 @@ documentation = "https://lazyrsync.westpoint.io/docs/install"
 readme = "README.md"
 keywords = ["rsync", "tui", "backup", "sync", "ratatui"]
 categories = ["command-line-utilities"]
-exclude = ["assets/", "videos/", "docs/", ".github/"]
+exclude = ["docs/", ".github/"]
 
 # cargo-binstall resolves GitHub Release assets produced by release.yml
 # (asset name: lazyrsync-<target>.tar.gz, binary at the archive root).

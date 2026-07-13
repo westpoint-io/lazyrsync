@@ -37,42 +37,42 @@ a run will change before it runs, and keep destructive flags behind a gate.
 
 Save a Source → Destination pair once and rerun it with a keystroke.
 
-![Profiles & tasks](assets/profiles.gif)
+![Profiles & tasks](https://github.com/user-attachments/assets/618f0e55-9c18-4280-aeba-648c79d26f01)
 
 ### Dry-run preview
 
 Press `p` and watch the transfer resolve into a `+`/`~`/`-` diff with stats.
 Nothing is written until you say so.
 
-![Dry-run preview](assets/preview.gif)
+![Dry-run preview](https://github.com/user-attachments/assets/3ede9c31-7561-48a5-8e3a-5ddfb201777a)
 
 ### Live run & cancel
 
 `r` runs it — a progress bar fills with byte and file counts. Press `c` to
 stop mid-transfer.
 
-![Live run & cancel](assets/run.gif)
+![Live run & cancel](https://github.com/user-attachments/assets/b384e60f-b8da-4c07-af8c-0dcf1611f4cd)
 
 ### Flags & `--delete` gating
 
 Toggle rsync's options as checkboxes. Flip on `--delete` and it makes you
 confirm before anything can be removed.
 
-![Flags & --delete gating](assets/flags.gif)
+![Flags & --delete gating](https://github.com/user-attachments/assets/9b1b3642-cdc5-49f2-b7dc-b17042278d76)
 
 ### Over SSH
 
 Put a `user@host:/path` on either side of a task and it runs over SSH — remote
 source downloads, remote destination uploads.
 
-![Over SSH](assets/ssh.gif)
+![Over SSH](https://github.com/user-attachments/assets/9e3d6b37-c2f9-4e18-817f-cb9d83ef4f15)
 
 ### Snapshots
 
 Keep numbered, hardlinked versions with `--link-dest` — each run writes the
 next directory (`1/`, `2/`, …).
 
-![Snapshots](assets/snapshot.gif)
+![Snapshots](https://github.com/user-attachments/assets/ff595565-462e-49b9-b30d-2f7f5c0291d9)
 
 ## Install
 
