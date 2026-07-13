@@ -220,7 +220,7 @@ impl Store {
         if self.profiles.len() < 2 {
             return;
         }
-        self.profiles[1..].sort_by(|a, b| b.created.cmp(&a.created));
+        self.profiles[1..].sort_by_key(|p| std::cmp::Reverse(p.created));
     }
 
     pub fn load() -> Result<Self> {

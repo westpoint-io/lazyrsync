@@ -219,7 +219,7 @@ impl Profile {
         if self.tasks.len() < 2 {
             return;
         }
-        self.tasks[1..].sort_by(|a, b| b.created.cmp(&a.created));
+        self.tasks[1..].sort_by_key(|t| std::cmp::Reverse(t.created));
     }
 }
 
