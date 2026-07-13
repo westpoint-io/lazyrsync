@@ -344,7 +344,8 @@ impl Browse {
         let [left, right] =
             Layout::horizontal([Constraint::Min(10), Constraint::Length(17)]).areas(area);
         frame.render_widget(
-            Line::from("lazyrsync 0.1.0 ".fg(Color::Reset)).right_aligned(),
+            Line::from(format!("lazyrsync {} ", env!("CARGO_PKG_VERSION")).fg(Color::Reset))
+                .right_aligned(),
             right,
         );
 
