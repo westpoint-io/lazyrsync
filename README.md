@@ -81,7 +81,7 @@ next directory (`1/`, `2/`, …).
 ```bash
 cargo install lazyrsync                    # crates.io
 cargo binstall lazyrsync                   # prebuilt release binary
-brew install westpoint-io/tap/lazyrsync    # Homebrew
+brew install westpoint-io/lazyrsync/lazyrsync   # Homebrew
 ```
 
 Also packaged for the **AUR** (`lazyrsync`) and **Nix**. To build from source:
