@@ -79,12 +79,13 @@ next directory (`1/`, `2/`, …).
 `rsync` must be on your `$PATH`.
 
 ```bash
-cargo install lazyrsync                    # crates.io
-cargo binstall lazyrsync                   # prebuilt release binary
-brew install westpoint-io/lazyrsync/lazyrsync   # Homebrew
+cargo install lazyrsync                          # crates.io
+cargo binstall lazyrsync                          # prebuilt release binary
+brew install westpoint-io/lazyrsync/lazyrsync     # Homebrew
+yay -S lazyrsync                                   # AUR (Arch)
 ```
 
-Also packaged for the **AUR** (`lazyrsync`) and **Nix**. To build from source:
+Or build from source:
 
 ```bash
 cargo install --path .
