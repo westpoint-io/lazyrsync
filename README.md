@@ -76,17 +76,19 @@ next directory (`1/`, `2/`, …).
 
 ## Install
 
-Requires a Rust toolchain and `rsync` on your `$PATH`.
+`rsync` must be on your `$PATH`.
 
 ```bash
-# install the binary from a clone
-cargo install --path .
-
-# or run straight from the source tree
-cargo run --release
+cargo install lazyrsync                    # crates.io
+cargo binstall lazyrsync                   # prebuilt release binary
+brew install westpoint-io/tap/lazyrsync    # Homebrew
 ```
 
-> Not yet published to a package manager — build from source for now.
+Also packaged for the **AUR** (`lazyrsync`) and **Nix**. To build from source:
+
+```bash
+cargo install --path .
+```
 
 ## Quickstart
 
