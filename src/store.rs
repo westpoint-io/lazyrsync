@@ -159,6 +159,7 @@ fn config_dir() -> PathBuf {
 pub struct Settings {
     pub skip_delete_warning: bool,
     pub hints: bool,
+    pub last_profile: String,
     pub theme: crate::ui::ThemeSpec,
 }
 
@@ -167,6 +168,7 @@ impl Default for Settings {
         Self {
             skip_delete_warning: false,
             hints: true,
+            last_profile: String::new(),
             theme: crate::ui::ThemeSpec::default(),
         }
     }

@@ -181,16 +181,22 @@ impl App {
     pub fn new() -> anyhow::Result<Self> {
         let settings = Settings::load();
         crate::ui::apply_theme(&settings.theme);
+        let store = Store::load()?;
+        let profile = store
+            .profiles
+            .iter()
+            .position(|p| p.name == settings.last_profile)
+            .unwrap_or(0);
         Ok(Self {
             ctx: Ctx {
-                store: Store::load()?,
+                store,
                 settings,
                 log: Vec::new(),
                 area: Rect::new(0, 0, 0, 0),
                 tick: 0,
                 shake: 0,
-                profile: 0,
-                pcursor: 0,
+                profile,
+                pcursor: profile,
                 task: 0,
                 subtab: 0,
             },
@@ -297,7 +303,13 @@ impl App {
     fn apply(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::None => {}
-            Cmd::Quit => self.running = false,
+            Cmd::Quit => {
+                if let Some(name) = self.ctx.active_profile().map(|p| p.name.clone()) {
+                    self.ctx.settings.last_profile = name;
+                }
+                let _ = self.ctx.settings.save();
+                self.running = false;
+            }
             Cmd::Overlay(overlay) => self.overlay = Some(overlay),
             Cmd::Close => {
                 self.overlay = None;
