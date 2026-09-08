@@ -102,6 +102,7 @@ cargo install lazyrsync      # crates.io
 cargo binstall lazyrsync     # prebuilt release binary
 brew install lazyrsync       # Homebrew
 yay -S lazyrsync             # AUR (Arch)
+x eget use westpoint-io/lazyrsync  # prebuilt release binary
 ```
 
 Or build from source:
