@@ -1,16 +1,18 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Paragraph, Wrap},
     Frame,
 };
 
-use crate::app::{Cmd, Ctx};
+use crate::app::{Cmd, Ctx, LogKind};
 use crate::profile::{Action, Task};
 use crate::rsync;
-use crate::ui::{accent, centered, deleted, field_box, field_status, hint_line, with_footer};
+use crate::ui::{
+    accent, centered, deleted, field_box, field_status, hint_line_in, warn, with_footer,
+};
 
 const WIDTH: u16 = 62;
 const BOX_H: u16 = 18;
@@ -41,6 +43,7 @@ pub struct AddTask {
     cursor: usize,
     id_taken: bool,
     attempted: bool,
+    quick: bool,
 }
 
 impl AddTask {
@@ -54,6 +57,24 @@ impl AddTask {
             cursor: 0,
             id_taken: false,
             attempted: false,
+            quick: false,
+        }
+    }
+
+    pub fn quick() -> Self {
+        Self {
+            row: 2,
+            quick: true,
+            ..Self::new()
+        }
+    }
+
+    fn step_row(&self, step: usize) -> usize {
+        let r = (self.row + step) % ROWS;
+        if self.quick && r == 0 {
+            (r + step) % ROWS
+        } else {
+            r
         }
     }
 
@@ -193,25 +214,28 @@ impl AddTask {
     }
 
     pub fn draw(&self, frame: &mut Frame, area: Rect, cx: &Ctx) {
+        let commit = if self.quick { "Preview" } else { "Save" };
+        let key_color = if self.quick { warn() } else { accent() };
         let footer = if cx.settings.hints {
             vec![
-                hint_line(&[("<tab>", "Move"), ("<ctrl+n>", "Complete")]),
-                hint_line(&[("<enter>", "Save"), ("<esc>", "Cancel")]),
+                hint_line_in(&[("<tab>", "Move"), ("<ctrl+n>", "Complete")], key_color),
+                hint_line_in(&[("<enter>", commit), ("<esc>", "Cancel")], key_color),
             ]
         } else {
             vec![]
         };
-        let area = with_footer(frame, cx, area, WIDTH, BOX_H, footer);
-        let rows = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(6),
-        ])
-        .split(area);
+        let box_h = if self.quick { BOX_H - 3 } else { BOX_H };
+        let area = with_footer(frame, cx, area, WIDTH, box_h, footer);
+        let mut heights = vec![Constraint::Length(3); ROWS];
+        if self.quick {
+            heights.remove(0);
+        }
+        heights.push(Constraint::Length(6));
+        let slots = Layout::vertical(heights).split(area);
+        let at = |row: usize| slots[if self.quick { row - 1 } else { row }];
 
         let cur = |row: usize| (self.row == row).then_some(self.cursor);
+        let tint = |c: Option<Color>| if self.quick { Some(warn()) } else { c };
 
         let name_line = if self.label.is_empty() {
             Line::from(vec![
@@ -226,28 +250,33 @@ impl AddTask {
         } else {
             (None, None)
         };
+        if !self.quick {
+            field_box(
+                frame,
+                at(0),
+                "ID",
+                self.row == 0,
+                name_line,
+                id_badge,
+                id_border,
+                cur(0),
+            );
+        }
         field_box(
             frame,
-            rows[0],
-            "ID",
-            self.row == 0,
-            name_line,
-            id_badge,
-            id_border,
-            cur(0),
-        );
-        field_box(
-            frame,
-            rows[1],
+            at(1),
             "Action",
             self.row == 1,
             Line::from(vec![
                 " ◂ ".dim(),
-                self.action.label().fg(accent()).bold(),
+                self.action
+                    .label()
+                    .fg(if self.quick { warn() } else { accent() })
+                    .bold(),
                 " ▸".dim(),
             ]),
             None,
-            None,
+            tint(None),
             None,
         );
         let (mut src_color, mut src_badge) = field_status(&self.source, self.row == 2, false);
@@ -257,12 +286,12 @@ impl AddTask {
         }
         field_box(
             frame,
-            rows[2],
+            at(2),
             "Source",
             self.row == 2,
             Line::from(format!(" {}", self.source)),
             src_badge,
-            Some(src_color),
+            tint(Some(src_color)),
             cur(2),
         );
         let (mut dst_color, mut dst_badge) = field_status(&self.dest, self.row == 3, true);
@@ -272,12 +301,12 @@ impl AddTask {
         }
         field_box(
             frame,
-            rows[3],
+            at(3),
             "Destination",
             self.row == 3,
             Line::from(format!(" {}", self.dest)),
             dst_badge,
-            Some(dst_color),
+            tint(Some(dst_color)),
             cur(3),
         );
 
@@ -290,10 +319,10 @@ impl AddTask {
                 .block(
                     Block::bordered()
                         .border_type(BorderType::Rounded)
-                        .border_style(Style::new().fg(accent()))
+                        .border_style(Style::new().fg(if self.quick { warn() } else { accent() }))
                         .title(Span::raw(" command ").dim()),
                 ),
-            rows[4],
+            slots[slots.len() - 1],
         );
     }
 
@@ -301,12 +330,12 @@ impl AddTask {
         match key.code {
             KeyCode::Esc => Cmd::Close,
             KeyCode::Down | KeyCode::Tab => {
-                self.row = (self.row + 1) % 4;
+                self.row = self.step_row(1);
                 self.cursor_to_end();
                 Cmd::None
             }
             KeyCode::Up | KeyCode::BackTab => {
-                self.row = (self.row + 3) % 4;
+                self.row = self.step_row(ROWS - 1);
                 self.cursor_to_end();
                 Cmd::None
             }
@@ -474,6 +503,11 @@ impl AddTask {
             return Cmd::None;
         }
 
+        if self.quick && (source.is_empty() || dest.is_empty()) {
+            self.attempted = true;
+            cx.reject();
+            return Cmd::None;
+        }
         let existing: Vec<String> = cx
             .store
             .profiles
@@ -499,13 +533,23 @@ impl AddTask {
             typed
         };
 
+        if self.quick {
+            task.label = basename(&source);
+            task.id = task.candidate_id();
+            task.label = task.id.clone();
+            task.created = Some(now_unix());
+            let id = task.id.clone();
+            cx.quick.push(task);
+            cx.push_log(LogKind::Info, format!("quick transfer '{id}', not saved"));
+            return Cmd::Preview;
+        }
         task.id = id.clone();
         task.label = id.clone();
         task.created = Some(now_unix());
         if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
             p.tasks.insert(0, task);
             p.sort_tasks_by_recency();
-            cx.task = 0;
+            cx.task = p.tasks.iter().position(|t| t.id == id).unwrap_or(0);
         }
         cx.subtab = 0;
         cx.save(&format!("added task '{id}'"));

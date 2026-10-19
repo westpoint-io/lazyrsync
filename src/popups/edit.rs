@@ -5,7 +5,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{Cmd, Ctx};
+use crate::app::{Cmd, Ctx, LogKind};
 use crate::editor::{Editor, Outcome, Section};
 use crate::profile::Task;
 use crate::ui::{centered, deleted, field_box, field_status, file_status, hint_line, with_footer};
@@ -91,6 +91,12 @@ impl SectionEdit {
         let task = self.ed.task().clone();
         let id = task.id.clone();
         let orig = self.ed.orig_id().to_string();
+        if !cx.quick.is_empty() {
+            let n = cx.quick.len() - 1;
+            cx.quick[n] = task;
+            cx.push_log(LogKind::Info, "updated the quick transfer");
+            return;
+        }
         if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
             if let Some(slot) = p.tasks.iter_mut().find(|t| t.id == orig) {
                 *slot = task;

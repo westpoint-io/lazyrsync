@@ -187,7 +187,15 @@ impl Browse {
             let w = (areas[i].width as usize).saturating_sub(2);
             let h = (areas[i].height as usize).saturating_sub(2);
             let panel_body = if f == 3 {
-                Text::from(self.runs.rail_line(cx))
+                let mut line = self.runs.rail_line(cx);
+                let sel = self.runs.sel_label();
+                let pending = sel
+                    .as_deref()
+                    .is_some_and(|l| cx.quick.iter().any(|q| q.id == l));
+                if pending && !line.spans.is_empty() {
+                    line.spans[0] = Span::styled(" » ", Style::new().fg(warn()).bold());
+                }
+                Text::from(line)
             } else {
                 self.panel_body(cx, f, w, h)
             };
@@ -323,12 +331,16 @@ impl Browse {
         Text::from(lines)
     }
 
-    fn detail_task(&self, t: &Task) -> Text<'static> {
-        let mut lines = vec![
+    fn detail_task(&self, t: &Task, quick: bool) -> Text<'static> {
+        let mut lines = vec![];
+        if quick {
+            lines.push(kvc("state", "unsaved  ·  a to keep".to_string(), warn()));
+        }
+        lines.extend([
             kvc("action", t.action.label().to_string(), added()),
             kvc("source", t.source.clone(), secondary()),
             kvc("destination", t.dest.clone(), secondary()),
-        ];
+        ]);
         if let Some(si) = rsync::snapshot_info(t) {
             lines.push(kvc("snapshots", si.count.to_string(), added()));
             if si.count > 0 {
@@ -415,6 +427,7 @@ impl Browse {
                 ("Filter", "/"),
             ],
             (0, _) => vec![
+                ("Quick", "t"),
                 ("Select", "␣"),
                 ("Run", "r"),
                 ("All", "R"),
@@ -428,6 +441,11 @@ impl Browse {
             (1, _) => vec![("Toggle", "␣"), ("Extra flags", "x"), ("Preview", "p")],
             _ => vec![("Edit", "i"), ("Clear", "<ctrl+r>"), ("Preview", "p")],
         };
+        if !cx.quick.is_empty() {
+            keys.retain(|(_, k)| *k != "a" && *k != "d");
+            keys.insert(0, ("Discard", "d"));
+            keys.insert(0, ("Keep", "a"));
+        }
         keys.push(("Keybindings", "?"));
         keys.push(("Quit", "q"));
 
@@ -546,7 +564,7 @@ impl Browse {
         match self.focus {
             1 => (label, self.command_view(t)),
             2 => (label, self.filters_view(t)),
-            _ => (label, self.detail_task(t)),
+            _ => (label, self.detail_task(t, !cx.quick.is_empty())),
         }
     }
 
