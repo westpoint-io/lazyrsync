@@ -52,8 +52,8 @@ impl ConfirmClearFilters {
     pub fn on_key(&mut self, key: KeyEvent, cx: &mut Ctx) -> Cmd {
         match key.code {
             KeyCode::Char('y') | KeyCode::Enter => {
-                if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
-                    if let Some(t) = p.tasks.get_mut(cx.task) {
+                if let Some(t) = cx.active_task_mut() {
+                    {
                         t.filters = Filters::default();
                     }
                 }

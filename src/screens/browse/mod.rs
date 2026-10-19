@@ -38,6 +38,10 @@ pub struct Browse {
 }
 
 impl Browse {
+    pub(crate) fn focus_tasks(&mut self) {
+        self.focus = 0;
+    }
+
     pub fn new() -> Self {
         Self {
             focus: 0,
