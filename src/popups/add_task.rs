@@ -11,7 +11,8 @@ use crate::app::{Cmd, Ctx, LogKind};
 use crate::profile::{Action, Task};
 use crate::rsync;
 use crate::ui::{
-    accent, centered, deleted, field_box, field_status, hint_line_in, warn, with_footer,
+    accent, centered, deleted, field_box, field_status, file_status, hint_line_in, warn,
+    with_footer,
 };
 
 const WIDTH: u16 = 62;
@@ -44,6 +45,9 @@ pub struct AddTask {
     id_taken: bool,
     attempted: bool,
     quick: bool,
+    ssh_port: String,
+    ssh_key: String,
+    ssh_extra: String,
 }
 
 impl AddTask {
@@ -58,6 +62,9 @@ impl AddTask {
             id_taken: false,
             attempted: false,
             quick: false,
+            ssh_port: "22".into(),
+            ssh_key: String::new(),
+            ssh_extra: String::new(),
         }
     }
 
@@ -69,10 +76,23 @@ impl AddTask {
         }
     }
 
+    fn shows_ssh(&self) -> bool {
+        self.quick && rsync::uses_ssh(&self.preview_task())
+    }
+
+    fn rows(&self) -> usize {
+        if self.shows_ssh() {
+            ROWS + 3
+        } else {
+            ROWS
+        }
+    }
+
     fn step_row(&self, step: usize) -> usize {
-        let r = (self.row + step) % ROWS;
+        let n = self.rows();
+        let r = (self.row + step) % n;
         if self.quick && r == 0 {
-            (r + step) % ROWS
+            (r + step) % n
         } else {
             r
         }
@@ -83,6 +103,9 @@ impl AddTask {
             0 => Some(&mut self.label),
             2 => Some(&mut self.source),
             3 => Some(&mut self.dest),
+            4 => Some(&mut self.ssh_port),
+            5 => Some(&mut self.ssh_key),
+            6 => Some(&mut self.ssh_extra),
             _ => None,
         }
     }
@@ -92,6 +115,9 @@ impl AddTask {
             0 => self.label.chars().count(),
             2 => self.source.chars().count(),
             3 => self.dest.chars().count(),
+            4 => self.ssh_port.chars().count(),
+            5 => self.ssh_key.chars().count(),
+            6 => self.ssh_extra.chars().count(),
             _ => 0,
         }
     }
@@ -101,6 +127,9 @@ impl AddTask {
             0 => Some(&self.label),
             2 => Some(&self.source),
             3 => Some(&self.dest),
+            4 => Some(&self.ssh_port),
+            5 => Some(&self.ssh_key),
+            6 => Some(&self.ssh_extra),
             _ => None,
         }
     }
@@ -210,11 +239,16 @@ impl AddTask {
         };
         let mut t = Task::new(label, src, self.dest.trim());
         t.action = self.action;
+        if self.quick {
+            t.ssh.port = self.ssh_port.trim().parse().unwrap_or(22);
+            t.ssh.keyfile = self.ssh_key.trim().to_string();
+            t.ssh.extra = self.ssh_extra.trim().to_string();
+        }
         t
     }
 
     pub fn draw(&self, frame: &mut Frame, area: Rect, cx: &Ctx) {
-        let commit = if self.quick { "Preview" } else { "Save" };
+        let commit = if self.quick { "Create" } else { "Save" };
         let key_color = if self.quick { warn() } else { accent() };
         let footer = if cx.settings.hints {
             vec![
@@ -224,13 +258,18 @@ impl AddTask {
         } else {
             vec![]
         };
-        let box_h = if self.quick { BOX_H - 3 } else { BOX_H };
+        let cmd_h = if self.shows_ssh() { 4 } else { 6 };
+        let box_h = if self.quick {
+            (self.rows() as u16 - 1) * 3 + cmd_h
+        } else {
+            BOX_H
+        };
         let area = with_footer(frame, cx, area, WIDTH, box_h, footer);
-        let mut heights = vec![Constraint::Length(3); ROWS];
+        let mut heights = vec![Constraint::Length(3); self.rows()];
         if self.quick {
             heights.remove(0);
         }
-        heights.push(Constraint::Length(6));
+        heights.push(Constraint::Length(cmd_h));
         let slots = Layout::vertical(heights).split(area);
         let at = |row: usize| slots[if self.quick { row - 1 } else { row }];
 
@@ -310,6 +349,48 @@ impl AddTask {
             cur(3),
         );
 
+        if self.shows_ssh() {
+            let (port_color, port_badge) = match self.ssh_port.trim().parse::<u16>() {
+                Ok(_) => (warn(), None),
+                Err(_) => (deleted(), Some("not a port".to_string())),
+            };
+            field_box(
+                frame,
+                at(4),
+                "SSH port",
+                self.row == 4,
+                Line::from(format!(" {}", self.ssh_port)),
+                port_badge,
+                Some(port_color),
+                cur(4),
+            );
+            let (key_border, key_badge) = if self.ssh_key.trim().is_empty() {
+                (warn(), (self.row == 5).then(|| "optional".to_string()))
+            } else {
+                file_status(&self.ssh_key, self.row == 5)
+            };
+            field_box(
+                frame,
+                at(5),
+                "SSH key file",
+                self.row == 5,
+                Line::from(format!(" {}", self.ssh_key)),
+                key_badge,
+                Some(key_border),
+                cur(5),
+            );
+            field_box(
+                frame,
+                at(6),
+                "SSH extra",
+                self.row == 6,
+                Line::from(format!(" {}", self.ssh_extra)),
+                (self.row == 6).then(|| "optional".to_string()),
+                Some(warn()),
+                cur(6),
+            );
+        }
+
         let preview = self.preview_task();
         let mut cmd = vec![Span::raw(" → ").dim()];
         cmd.push(Span::raw(rsync::resolved_command(&preview, false)));
@@ -335,7 +416,7 @@ impl AddTask {
                 Cmd::None
             }
             KeyCode::Up | KeyCode::BackTab => {
-                self.row = self.step_row(ROWS - 1);
+                self.row = self.step_row(self.rows() - 1);
                 self.cursor_to_end();
                 Cmd::None
             }
@@ -540,8 +621,11 @@ impl AddTask {
             task.created = Some(now_unix());
             let id = task.id.clone();
             cx.quick.push(task);
-            cx.push_log(LogKind::Info, format!("quick transfer '{id}', not saved"));
-            return Cmd::Preview;
+            cx.push_log(
+                LogKind::Info,
+                format!("quick transfer '{id}' ready — p to preview, r to run"),
+            );
+            return Cmd::CloseToRuns;
         }
         task.id = id.clone();
         task.label = id.clone();

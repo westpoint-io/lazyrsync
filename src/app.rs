@@ -126,8 +126,8 @@ pub enum Cmd {
     Close,
     RequestRun(Vec<Task>),
     StartRun(Vec<Task>),
-    Preview,
     CloseToTasks,
+    CloseToRuns,
 }
 
 pub trait Component {
@@ -360,9 +360,10 @@ impl App {
                 self.browse.focus_tasks();
                 self.browse.on_resume(&self.ctx);
             }
-            Cmd::Preview => {
+            Cmd::CloseToRuns => {
                 self.overlay = None;
-                self.browse.start_preview(&mut self.ctx);
+                self.browse.focus_runs();
+                self.browse.on_resume(&self.ctx);
             }
             Cmd::RequestRun(batch) => self.apply(Cmd::StartRun(batch)),
             Cmd::StartRun(batch) => {

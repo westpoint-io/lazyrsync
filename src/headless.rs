@@ -85,6 +85,7 @@ fn succeeded(code: i32) -> bool {
 }
 
 fn spawn_task(task: &Task, dry_run: bool, verbose: bool) -> Result<i32> {
+    rsync::check_ssh(task).map_err(|e| anyhow::anyhow!(e))?;
     if !dry_run {
         rsync::prepare_dest(task)?;
     }
