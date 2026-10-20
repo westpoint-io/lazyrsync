@@ -42,6 +42,10 @@ impl Browse {
         self.focus = 0;
     }
 
+    pub(crate) fn focus_runs(&mut self) {
+        self.focus = 3;
+    }
+
     pub fn new() -> Self {
         Self {
             focus: 0,
