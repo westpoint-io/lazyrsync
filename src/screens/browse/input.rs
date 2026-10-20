@@ -166,8 +166,8 @@ impl Browse {
             {
                 self.clear_filters(cx)
             }
-            KeyCode::Char('a') if !cx.quick.is_empty() => self.keep_task(cx),
-            KeyCode::Char('d') if !cx.quick.is_empty() => {
+            KeyCode::Char('a') if self.focus == 3 && !cx.quick.is_empty() => self.keep_task(cx),
+            KeyCode::Char('d') if self.focus == 3 && !cx.quick.is_empty() => {
                 match self.pending_index(cx) {
                     Some(i) => {
                         let t = cx.quick.remove(i);
