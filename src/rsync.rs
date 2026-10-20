@@ -133,6 +133,77 @@ pub fn build_args_with(task: &Task, opts: ArgOpts) -> Vec<String> {
     assemble(task, &resolve(task), opts)
 }
 
+fn host_of(p: &str) -> Option<&str> {
+    if !is_remote_path(p) {
+        return None;
+    }
+    let host = p.split(':').next().unwrap_or(p);
+    (!host.is_empty()).then_some(host)
+}
+
+pub fn uses_ssh(task: &Task) -> bool {
+    remote_host(task).is_some()
+}
+
+pub fn remote_host(task: &Task) -> Option<String> {
+    let ep = resolve(task);
+    host_of(&ep.dst)
+        .or_else(|| host_of(&ep.src))
+        .map(str::to_string)
+}
+
+pub fn ssh_probe_args(task: &Task) -> Option<Vec<String>> {
+    let host = remote_host(task)?;
+    let ssh = &task.ssh;
+    let mut args = vec![
+        "-o".into(),
+        "BatchMode=yes".into(),
+        "-o".into(),
+        "ConnectTimeout=5".into(),
+    ];
+    if ssh.port != 22 {
+        args.push("-p".into());
+        args.push(ssh.port.to_string());
+    }
+    if !ssh.keyfile.is_empty() {
+        args.push("-i".into());
+        args.push(expand_local(&ssh.keyfile));
+    }
+    args.extend(split_args(ssh.extra.trim()));
+    args.push(host);
+    args.push("true".into());
+    Some(args)
+}
+
+fn ssh_reason(stderr: &str) -> String {
+    stderr
+        .lines()
+        .map(str::trim)
+        .rfind(|l| !l.is_empty() && !l.starts_with("Warning:"))
+        .unwrap_or("no further detail")
+        .to_string()
+}
+
+pub fn check_ssh(task: &Task) -> Result<(), String> {
+    let Some(args) = ssh_probe_args(task) else {
+        return Ok(());
+    };
+    let host = remote_host(task).unwrap_or_default();
+    let out = std::process::Command::new("ssh")
+        .args(&args)
+        .stdin(std::process::Stdio::null())
+        .output();
+    match out {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let detail = ssh_reason(&stderr);
+            Err(format!("cannot reach {host} over ssh: {detail}"))
+        }
+        Err(e) => Err(format!("cannot run ssh to reach {host}: {e}")),
+    }
+}
+
 pub fn prepare_dest(task: &Task) -> std::io::Result<()> {
     let ep = resolve(task);
     if is_remote_path(&ep.dst) {
@@ -596,6 +667,67 @@ mod tests {
         let args = build_args(&p, false);
         assert!(!args.contains(&"-a".to_string()));
         assert!(args.contains(&"-H".to_string()));
+    }
+
+    #[test]
+    fn the_reason_is_the_last_line_that_is_not_a_warning() {
+        let out = "Warning: Permanently added '[127.0.0.1]:2222' (ED25519) to the list of known hosts.\nlight@127.0.0.1: Permission denied (publickey).\n";
+        assert_eq!(
+            ssh_reason(out),
+            "light@127.0.0.1: Permission denied (publickey)."
+        );
+        assert_eq!(
+            ssh_reason("ssh: Could not resolve hostname nope: Name or service not known\n"),
+            "ssh: Could not resolve hostname nope: Name or service not known"
+        );
+        assert_eq!(ssh_reason("   \n"), "no further detail");
+    }
+
+    #[test]
+    fn a_local_path_with_a_colon_is_not_remote() {
+        let t = Task::new("t", "~/src/", "~/another-destination:power/system");
+        assert!(
+            remote_host(&t).is_none(),
+            "a tilde path with a colon is still local"
+        );
+        assert!(ssh_probe_args(&t).is_none());
+    }
+
+    #[test]
+    fn a_probe_names_the_host_and_carries_the_ssh_settings() {
+        let mut t = Task::new("t", "/src/", "deploy@box:/srv/");
+        t.ssh.port = 2222;
+        t.ssh.extra = "-o ConnectTimeout=5".into();
+        assert_eq!(
+            ssh_probe_args(&t).unwrap(),
+            [
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=5",
+                "-p",
+                "2222",
+                "-o",
+                "ConnectTimeout=5",
+                "deploy@box",
+                "true"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_probe_reads_the_host_from_either_end() {
+        let pull = Task::new("t", "box:/srv/", "/dst/");
+        assert_eq!(remote_host(&pull).as_deref(), Some("box"));
+        let push = Task::new("t", "/src/", "deploy@box:/srv/");
+        assert_eq!(remote_host(&push).as_deref(), Some("deploy@box"));
+    }
+
+    #[test]
+    fn a_local_transfer_is_never_probed() {
+        let mut t = Task::new("t", "/src/", "/dst/");
+        t.ssh.port = 2222;
+        assert!(ssh_probe_args(&t).is_none());
     }
 
     #[test]

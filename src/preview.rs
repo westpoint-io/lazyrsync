@@ -36,11 +36,16 @@ impl Drop for PreviewHandle {
 
 pub fn spawn(task: &Task) -> PreviewHandle {
     let args = rsync::build_args(task, true);
+    let probe = task.clone();
     let (tx, rx) = mpsc::channel();
     let child_slot: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
     let slot = child_slot.clone();
 
     thread::spawn(move || {
+        if let Err(e) = crate::rsync::check_ssh(&probe) {
+            let _ = tx.send(PreviewMsg::Failed(-1, e));
+            return;
+        }
         let mut child = match Command::new(crate::rsync::binary())
             .args(&args)
             .stdin(Stdio::null())

@@ -60,6 +60,10 @@ pub fn start(task: &Task) -> RunHandle {
     let slot = child_slot.clone();
 
     thread::spawn(move || {
+        if let Err(e) = rsync::check_ssh(&task) {
+            let _ = tx.send(RunMsg::Failed(e));
+            return;
+        }
         if let Err(e) = rsync::prepare_dest(&task) {
             let _ = tx.send(RunMsg::Failed(format!("could not create destination: {e}")));
             return;
