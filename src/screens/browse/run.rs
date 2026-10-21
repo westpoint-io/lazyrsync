@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
+use chrono::Local;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     style::{Color, Style, Stylize},
@@ -11,6 +12,7 @@ use ratatui::{
 };
 
 use crate::app::{Ctx, LogKind};
+use crate::history;
 use crate::preview::{self, Change, ChangeKind, Preview, PreviewHandle, PreviewMsg};
 use crate::profile::Task;
 use crate::run::{self, Progress, RunHandle, RunMsg};
@@ -302,12 +304,42 @@ impl Runs {
         }
     }
 
+    fn record(&self, active: usize, outcome: history::Outcome, code: i32, enabled: bool) {
+        let job = &self.jobs[active];
+        let files = match job.kind {
+            JobKind::Preview => job.preview.as_ref().map(|pv| pv.stats.files),
+            JobKind::Real => job
+                .progress
+                .as_ref()
+                .filter(|p| p.files_final)
+                .map(|p| p.files_total),
+        };
+        history::append(
+            history::Record {
+                at: Local::now().format("%Y-%m-%d %H:%M").to_string(),
+                task: job.label.clone(),
+                outcome,
+                code,
+                files,
+                secs: job.elapsed,
+                dry_run: job.kind == JobKind::Preview,
+            },
+            enabled,
+        );
+    }
+
     fn finish(&mut self, active: usize, code: i32, cx: &mut Ctx) {
         self.jobs[active].elapsed = self.jobs[active].started.elapsed().as_secs();
         let label = self.jobs[active].label.clone();
         let is_preview = self.jobs[active].kind == JobKind::Preview;
         if self.cancelling {
             self.jobs[active].status = JobStatus::Cancelled;
+            self.record(
+                active,
+                history::Outcome::Cancelled,
+                code,
+                cx.settings.history,
+            );
             let verb = if is_preview { "Dry-run" } else { "Run" };
             cx.push_log(LogKind::Warn, format!("{verb} Cancelled - {label}"));
             self.drop_queued();
@@ -315,6 +347,7 @@ impl Runs {
             self.handle = None;
         } else if code == 0 {
             self.jobs[active].status = JobStatus::Done(0);
+            self.record(active, history::Outcome::Ok, 0, cx.settings.history);
             if is_preview {
                 if let Some(pv) = &self.jobs[active].preview {
                     let s = &pv.stats;
@@ -344,10 +377,12 @@ impl Runs {
             self.start_next(cx);
         } else if is_preview {
             self.jobs[active].status = JobStatus::Done(code);
+            self.record(active, history::Outcome::Failed, code, cx.settings.history);
             cx.push_log(LogKind::Error, format!("Dry-run Failed - {label}"));
             self.start_next(cx);
         } else {
             self.jobs[active].status = JobStatus::Done(code);
+            self.record(active, history::Outcome::Failed, code, cx.settings.history);
             self.jobs[active]
                 .output
                 .push(format!("✗ rsync exited with code {code}"));
