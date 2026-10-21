@@ -194,21 +194,7 @@ impl Browse {
             let w = (areas[i].width as usize).saturating_sub(2);
             let h = (areas[i].height as usize).saturating_sub(2);
             let panel_body = if f == 3 {
-                let sel = self.runs.sel_label();
-                let mut line = match (&sel, cx.quick.last()) {
-                    (None, Some(q)) => Line::from(vec![
-                        " » ".fg(warn()).bold(),
-                        truncate(&q.id, w.saturating_sub(4)).fg(Color::Reset),
-                    ]),
-                    _ => self.runs.rail_line(cx),
-                };
-                let pending = sel
-                    .as_deref()
-                    .is_some_and(|l| cx.quick.iter().any(|q| q.id == l));
-                if pending && !line.spans.is_empty() {
-                    line.spans[0] = Span::styled(" » ", Style::new().fg(warn()).bold());
-                }
-                Text::from(line)
+                Text::from(self.runs.rail_line(cx))
             } else {
                 self.panel_body(cx, f, w, h)
             };
@@ -454,7 +440,7 @@ impl Browse {
             (1, _) => vec![("Toggle", "␣"), ("Extra flags", "x"), ("Preview", "p")],
             _ => vec![("Edit", "i"), ("Clear", "<ctrl+r>"), ("Preview", "p")],
         };
-        if self.focus == 3 && !cx.quick.is_empty() {
+        if self.focus == 3 && self.selected_quick(cx).is_some() {
             keys.insert(0, ("Discard", "d"));
             keys.insert(0, ("Keep", "a"));
         }
