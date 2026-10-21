@@ -157,6 +157,26 @@ fn config_dir() -> PathBuf {
         .unwrap_or_default()
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Quiet,
+    #[default]
+    Normal,
+    Verbose,
+}
+
+impl LogLevel {
+    pub fn shows(self, kind: crate::app::LogKind) -> bool {
+        use crate::app::LogKind::*;
+        match kind {
+            Error | Warn => true,
+            Active | Done => self != LogLevel::Quiet,
+            Info | Command => self == LogLevel::Verbose,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -164,6 +184,10 @@ pub struct Settings {
     pub skip_run_confirm: bool,
     pub skip_remove_confirm: bool,
     pub hints: bool,
+    pub history: bool,
+    pub log: LogLevel,
+    pub log_size: u16,
+    pub show_log: bool,
     pub last_profile: String,
     pub rsync_path: String,
     pub theme: crate::ui::ThemeSpec,
@@ -176,6 +200,10 @@ impl Default for Settings {
             skip_run_confirm: false,
             skip_remove_confirm: false,
             hints: true,
+            history: true,
+            log: LogLevel::default(),
+            log_size: 8,
+            show_log: true,
             last_profile: String::new(),
             rsync_path: "rsync".into(),
             theme: crate::ui::ThemeSpec::default(),
@@ -303,6 +331,24 @@ fn read_file(path: &Path) -> Result<Vec<Profile>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::LogKind;
+
+    #[test]
+    fn no_log_level_can_hide_a_failure() {
+        for level in [LogLevel::Quiet, LogLevel::Normal, LogLevel::Verbose] {
+            assert!(level.shows(LogKind::Error), "{level:?} hid an error");
+            assert!(level.shows(LogKind::Warn), "{level:?} hid a warning");
+        }
+    }
+
+    #[test]
+    fn the_levels_stack() {
+        assert!(!LogLevel::Quiet.shows(LogKind::Done));
+        assert!(LogLevel::Normal.shows(LogKind::Done));
+        assert!(!LogLevel::Normal.shows(LogKind::Command));
+        assert!(LogLevel::Verbose.shows(LogKind::Command));
+        assert!(LogLevel::Verbose.shows(LogKind::Done));
+    }
 
     #[test]
     fn saving_settings_keeps_hand_edited_keys() {

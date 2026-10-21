@@ -1,6 +1,7 @@
 mod app;
 mod editor;
 mod headless;
+mod history;
 mod paths;
 mod popups;
 mod preview;
@@ -49,6 +50,12 @@ enum Command {
 
     #[command(about = "List profiles, task ids, and their resolved rsync commands")]
     List,
+
+    #[command(about = "Print recent runs, newest last")]
+    Log {
+        #[arg(short, long, default_value_t = 20, help = "How many runs to show")]
+        limit: usize,
+    },
 }
 
 const ERROR_LABEL: anstyle::Style = anstyle::Style::new()
@@ -72,6 +79,7 @@ fn main() -> anyhow::Result<()> {
             headless::list(&load_or_exit().profiles);
             Ok(())
         }
+        Some(Command::Log { limit }) => std::process::exit(headless::log(limit)),
         Some(Command::Run {
             target,
             dry_run,

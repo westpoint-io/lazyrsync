@@ -90,6 +90,9 @@ impl Ctx {
     }
 
     pub fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
+        if !self.settings.log.shows(kind) {
+            return;
+        }
         let at = Local::now().format("%H:%M:%S").to_string();
         self.log.push(LogEntry {
             at,
@@ -240,6 +243,19 @@ impl App {
             overlay: None,
             running: true,
         };
+        let replay = if app.ctx.settings.history { 20 } else { 0 };
+        for r in crate::history::load().iter().rev().take(replay).rev() {
+            let kind = match r.outcome {
+                crate::history::Outcome::Ok => LogKind::Done,
+                crate::history::Outcome::Failed => LogKind::Error,
+                crate::history::Outcome::Cancelled => LogKind::Warn,
+            };
+            app.ctx.log.push(LogEntry {
+                at: r.at.clone(),
+                kind,
+                text: crate::history::summary(r),
+            });
+        }
         if let Some(warning) = crate::rsync::capability_warning() {
             app.ctx.push_log(LogKind::Warn, warning);
         }
