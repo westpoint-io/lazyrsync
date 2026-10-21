@@ -60,7 +60,9 @@ enum JobKind {
     Preview,
 }
 
+#[derive(PartialEq)]
 enum JobStatus {
+    Pending,
     Queued,
     Active,
     Done(i32),
@@ -140,6 +142,56 @@ impl Runs {
         self.active.is_some()
     }
 
+    pub fn park(&mut self, task: Task) {
+        let id = task.id.clone();
+        if let Some(i) = self.pending_index(&id) {
+            self.jobs[i].task = task;
+            self.sel = i;
+            return;
+        }
+        self.push_job(task, JobKind::Real);
+        let i = self.jobs.len() - 1;
+        self.jobs[i].status = JobStatus::Pending;
+        self.sel = i;
+        self.scroll = 0;
+    }
+
+    fn pending_index(&self, id: &str) -> Option<usize> {
+        self.jobs
+            .iter()
+            .position(|j| j.status == JobStatus::Pending && j.task.id == id)
+    }
+
+    pub fn prune_pending(&mut self, alive: &[String]) {
+        let gone: Vec<usize> = self
+            .jobs
+            .iter()
+            .enumerate()
+            .filter(|(_, j)| j.status == JobStatus::Pending && !alive.contains(&j.task.id))
+            .map(|(i, _)| i)
+            .collect();
+        for i in gone.into_iter().rev() {
+            self.jobs.remove(i);
+            if let Some(a) = self.active.as_mut() {
+                if *a > i {
+                    *a -= 1;
+                }
+            }
+        }
+        self.sel = self.sel.min(self.jobs.len().saturating_sub(1));
+    }
+
+    fn claim_pending(&mut self, task: &Task, kind: JobKind) -> Option<usize> {
+        let i = self.pending_index(&task.id)?;
+        self.jobs[i].kind = kind;
+        self.jobs[i].task = task.clone();
+        self.jobs[i].status = JobStatus::Queued;
+        self.jobs[i].output.clear();
+        self.jobs[i].preview = None;
+        self.jobs[i].progress = None;
+        Some(i)
+    }
+
     fn push_job(&mut self, task: Task, kind: JobKind) {
         self.jobs.push(Job {
             label: task.label.clone(),
@@ -158,7 +210,9 @@ impl Runs {
     pub fn enqueue(&mut self, batch: Vec<Task>, cx: &mut Ctx) {
         self.drop_old_previews();
         for task in batch {
-            self.push_job(task, JobKind::Real);
+            if self.claim_pending(&task, JobKind::Real).is_none() {
+                self.push_job(task, JobKind::Real);
+            }
         }
         if self.active.is_none() {
             self.start_next(cx);
@@ -170,8 +224,13 @@ impl Runs {
 
     pub fn preview(&mut self, task: Task, cx: &mut Ctx) {
         self.drop_old_previews();
-        self.push_job(task, JobKind::Preview);
-        let idx = self.jobs.len() - 1;
+        let idx = match self.claim_pending(&task, JobKind::Preview) {
+            Some(i) => i,
+            None => {
+                self.push_job(task, JobKind::Preview);
+                self.jobs.len() - 1
+            }
+        };
         if self.active.is_none() {
             self.start_next(cx);
         }
@@ -679,7 +738,16 @@ impl Runs {
 
     pub fn rail_line(&self, cx: &Ctx) -> Line<'static> {
         let mut line = self.rail_line_body(cx);
-        line.spans.insert(0, " ".into());
+        let unsaved = self
+            .sel_job()
+            .is_some_and(|j| cx.quick.iter().any(|q| q.id == j.task.id));
+        if unsaved && !matches!(self.sel_job().map(|j| &j.status), Some(JobStatus::Pending)) {
+            line.spans
+                .insert(0, Span::styled("» ", Style::new().fg(warn()).bold()));
+            line.spans.insert(0, " ".into());
+        } else {
+            line.spans.insert(0, " ".into());
+        }
         line
     }
 
@@ -689,6 +757,11 @@ impl Runs {
         };
         let name = trunc(&job.label, 18);
         match &job.status {
+            JobStatus::Pending => Line::from(vec![
+                "» ".fg(warn()).bold(),
+                name.into(),
+                " [UNSAVED]".fg(warn()),
+            ]),
             JobStatus::Cancelled => Line::from(vec![
                 "✗ ".fg(warn()),
                 name.into(),
@@ -764,6 +837,9 @@ impl Runs {
         }
         let mut lines = Vec::new();
         match &job.status {
+            JobStatus::Pending => lines.push(Line::from(
+                "   Not run yet — p to preview, r to run, a to keep".fg(warn()),
+            )),
             JobStatus::Active => lines.push(active_line(job, cx)),
             JobStatus::Done(0) => lines.push(Line::from(
                 format!("   ✓ done · {}", fmt_dur(job.elapsed)).fg(added()),

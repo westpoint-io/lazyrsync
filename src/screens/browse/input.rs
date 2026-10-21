@@ -166,11 +166,15 @@ impl Browse {
             {
                 self.clear_filters(cx)
             }
-            KeyCode::Char('a') if self.focus == 3 && !cx.quick.is_empty() => self.keep_task(cx),
-            KeyCode::Char('d') if self.focus == 3 && !cx.quick.is_empty() => {
-                match self.pending_index(cx) {
+            KeyCode::Char('a') if self.focus == 3 && self.selected_quick(cx).is_some() => {
+                self.keep_task(cx)
+            }
+            KeyCode::Char('d') if self.focus == 3 && self.selected_quick(cx).is_some() => {
+                match self.selected_quick(cx) {
                     Some(i) => {
                         let t = cx.quick.remove(i);
+                        let alive: Vec<String> = cx.quick.iter().map(|q| q.id.clone()).collect();
+                        self.runs.prune_pending(&alive);
                         cx.push_log(LogKind::Info, format!("discarded '{}'", t.id));
                     }
                     None => cx.push_log(LogKind::Warn, "select a pending transfer first"),
@@ -415,15 +419,12 @@ impl Browse {
         Cmd::Overlay(Overlay::AddTask(AddTask::quick()))
     }
 
-    fn pending_index(&self, cx: &Ctx) -> Option<usize> {
-        self.runs
-            .sel_label()
-            .and_then(|l| cx.quick_index(&l))
-            .or_else(|| cx.quick.len().checked_sub(1))
+    pub(super) fn selected_quick(&self, cx: &Ctx) -> Option<usize> {
+        self.runs.sel_label().and_then(|l| cx.quick_index(&l))
     }
 
     fn keep_task(&mut self, cx: &mut Ctx) -> Cmd {
-        let Some(i) = self.pending_index(cx) else {
+        let Some(i) = self.selected_quick(cx) else {
             cx.push_log(LogKind::Warn, "no quick transfer to keep");
             return Cmd::None;
         };
@@ -509,7 +510,7 @@ impl Browse {
             let all: Vec<Task> = (lo..=hi).filter_map(|i| p.tasks.get(i).cloned()).collect();
             return Self::request_run(all, cx.settings.skip_run_confirm);
         }
-        if let Some(t) = self.pending_index(cx).map(|i| cx.quick[i].clone()) {
+        if let Some(t) = self.selected_quick(cx).map(|i| cx.quick[i].clone()) {
             return Self::request_run(vec![t], cx.settings.skip_run_confirm);
         }
         self.select_task(cx);

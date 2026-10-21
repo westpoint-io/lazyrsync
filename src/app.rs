@@ -378,6 +378,7 @@ impl App {
             }
             Cmd::CloseToRuns => {
                 self.overlay = None;
+                self.browse.park_quick(&self.ctx);
                 self.browse.focus_runs();
                 self.browse.on_resume(&self.ctx);
             }
