@@ -179,6 +179,10 @@ impl Browse {
             }
             KeyCode::Char('a') if self.focus == 0 => self.add(cx),
             KeyCode::Char('t') => self.quick_transfer(cx),
+            KeyCode::Char('@') => {
+                cx.settings.show_log = !cx.settings.show_log;
+                Cmd::None
+            }
             KeyCode::Char('r') if self.focus == 0 && cx.subtab == 1 => {
                 match cx.store.profiles.get(cx.pcursor) {
                     Some(p) => {

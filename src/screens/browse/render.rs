@@ -69,8 +69,15 @@ impl Browse {
 
         self.draw_rail(frame, rail, cx);
 
-        let [main, log] =
-            Layout::vertical([Constraint::Min(6), Constraint::Length(8)]).areas(right);
+        let [main, log] = Layout::vertical([
+            Constraint::Min(6),
+            Constraint::Length(if cx.settings.show_log {
+                cx.settings.log_size
+            } else {
+                0
+            }),
+        ])
+        .areas(right);
         self.draw_context(frame, main, cx);
 
         let inner_w = (log.width as usize).saturating_sub(2);
