@@ -5,9 +5,10 @@ use super::{Browse, SUBTABS};
 use crate::app::{Cmd, Ctx, LogKind, Overlay};
 use crate::editor;
 use crate::popups::{
-    AddTask, Alert, ConfirmClearFilters, ConfirmDelete, ConfirmRun, Help, Prompt, SectionEdit,
+    AddTask, Alert, ConfirmClearFilters, ConfirmDelete, ConfirmRun, Help, Keep, Prompt, SectionEdit,
 };
 use crate::profile::Task;
+
 use crate::ui::rail_constraints;
 
 impl Browse {
@@ -106,12 +107,10 @@ impl Browse {
                         return Cmd::Overlay(Overlay::Alert(Alert::enable_flag(self.flag, label)));
                     }
                 }
-                if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
-                    if let Some(t) = p.tasks.get_mut(cx.task) {
-                        editor::toggle_bool_flag(&mut t.flags, self.flag);
-                    }
+                if let Some(t) = cx.active_task_mut() {
+                    editor::toggle_bool_flag(&mut t.flags, self.flag);
                 }
-                cx.save("toggled flag");
+                cx.save_tasks("toggled flag");
                 Cmd::None
             }
             KeyCode::PageDown => {
@@ -167,7 +166,27 @@ impl Browse {
             {
                 self.clear_filters(cx)
             }
+            KeyCode::Char('a') if self.focus == 3 && self.selected_quick(cx).is_some() => {
+                self.keep_task(cx)
+            }
+            KeyCode::Char('d') if self.focus == 3 && self.selected_quick(cx).is_some() => {
+                match self.selected_quick(cx) {
+                    Some(i) => {
+                        let t = cx.quick.remove(i);
+                        let alive: Vec<String> = cx.quick.iter().map(|q| q.id.clone()).collect();
+                        self.runs.prune_pending(&alive);
+                        cx.push_log(LogKind::Info, format!("discarded '{}'", t.id));
+                    }
+                    None => cx.push_log(LogKind::Warn, "select a pending transfer first"),
+                }
+                Cmd::None
+            }
             KeyCode::Char('a') if self.focus == 0 => self.add(cx),
+            KeyCode::Char('t') => self.quick_transfer(cx),
+            KeyCode::Char('@') => {
+                cx.settings.show_log = !cx.settings.show_log;
+                Cmd::None
+            }
             KeyCode::Char('r') if self.focus == 0 && cx.subtab == 1 => {
                 match cx.store.profiles.get(cx.pcursor) {
                     Some(p) => {
@@ -396,6 +415,22 @@ impl Browse {
         let _ = cx.store.save();
     }
 
+    fn quick_transfer(&self, _cx: &mut Ctx) -> Cmd {
+        Cmd::Overlay(Overlay::AddTask(AddTask::quick()))
+    }
+
+    pub(super) fn selected_quick(&self, cx: &Ctx) -> Option<usize> {
+        self.runs.sel_label().and_then(|l| cx.quick_index(&l))
+    }
+
+    fn keep_task(&mut self, cx: &mut Ctx) -> Cmd {
+        let Some(i) = self.selected_quick(cx) else {
+            cx.push_log(LogKind::Warn, "no quick transfer to keep");
+            return Cmd::None;
+        };
+        Cmd::Overlay(Overlay::Keep(Keep::new(cx, i)))
+    }
+
     fn add(&self, cx: &mut Ctx) -> Cmd {
         if cx.subtab == 1 {
             Cmd::Overlay(Overlay::Prompt(Prompt::new_profile(String::new())))
@@ -475,6 +510,9 @@ impl Browse {
             let all: Vec<Task> = (lo..=hi).filter_map(|i| p.tasks.get(i).cloned()).collect();
             return Self::request_run(all, cx.settings.skip_run_confirm);
         }
+        if let Some(t) = self.selected_quick(cx).map(|i| cx.quick[i].clone()) {
+            return Self::request_run(vec![t], cx.settings.skip_run_confirm);
+        }
         self.select_task(cx);
         match cx.active_task().cloned() {
             Some(t) => Self::request_run(vec![t], cx.settings.skip_run_confirm),
@@ -514,7 +552,12 @@ impl Browse {
         Self::request_run(p.tasks.clone(), cx.settings.skip_run_confirm)
     }
 
-    fn start_preview(&mut self, cx: &mut Ctx) {
+    pub(crate) fn start_preview(&mut self, cx: &mut Ctx) {
+        if let Some(t) = cx.quick.last().cloned() {
+            self.runs.preview(t, cx);
+            self.focus = 3;
+            return;
+        }
         self.select_task(cx);
         let Some(t) = cx.active_task().cloned() else {
             cx.push_log(LogKind::Warn, "no task to preview");

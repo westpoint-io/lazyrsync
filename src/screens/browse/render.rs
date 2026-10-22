@@ -69,8 +69,15 @@ impl Browse {
 
         self.draw_rail(frame, rail, cx);
 
-        let [main, log] =
-            Layout::vertical([Constraint::Min(6), Constraint::Length(8)]).areas(right);
+        let [main, log] = Layout::vertical([
+            Constraint::Min(6),
+            Constraint::Length(if cx.settings.show_log {
+                cx.settings.log_size
+            } else {
+                0
+            }),
+        ])
+        .areas(right);
         self.draw_context(frame, main, cx);
 
         let inner_w = (log.width as usize).saturating_sub(2);
@@ -323,12 +330,16 @@ impl Browse {
         Text::from(lines)
     }
 
-    fn detail_task(&self, t: &Task) -> Text<'static> {
-        let mut lines = vec![
+    fn detail_task(&self, t: &Task, quick: bool) -> Text<'static> {
+        let mut lines = vec![];
+        if quick {
+            lines.push(kvc("state", "unsaved  ·  a to keep".to_string(), warn()));
+        }
+        lines.extend([
             kvc("action", t.action.label().to_string(), added()),
             kvc("source", t.source.clone(), secondary()),
             kvc("destination", t.dest.clone(), secondary()),
-        ];
+        ]);
         if let Some(si) = rsync::snapshot_info(t) {
             lines.push(kvc("snapshots", si.count.to_string(), added()));
             if si.count > 0 {
@@ -415,6 +426,7 @@ impl Browse {
                 ("Filter", "/"),
             ],
             (0, _) => vec![
+                ("Quick", "t"),
                 ("Select", "␣"),
                 ("Run", "r"),
                 ("All", "R"),
@@ -428,6 +440,10 @@ impl Browse {
             (1, _) => vec![("Toggle", "␣"), ("Extra flags", "x"), ("Preview", "p")],
             _ => vec![("Edit", "i"), ("Clear", "<ctrl+r>"), ("Preview", "p")],
         };
+        if self.focus == 3 && self.selected_quick(cx).is_some() {
+            keys.insert(0, ("Discard", "d"));
+            keys.insert(0, ("Keep", "a"));
+        }
         keys.push(("Keybindings", "?"));
         keys.push(("Quit", "q"));
 
@@ -546,7 +562,7 @@ impl Browse {
         match self.focus {
             1 => (label, self.command_view(t)),
             2 => (label, self.filters_view(t)),
-            _ => (label, self.detail_task(t)),
+            _ => (label, self.detail_task(t, !cx.quick.is_empty())),
         }
     }
 

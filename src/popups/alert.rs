@@ -63,8 +63,8 @@ impl Alert {
             KeyCode::Char('y') | KeyCode::Enter => {
                 match self.action {
                     AlertAction::EnableFlag { field_index, label } => {
-                        if let Some(p) = cx.store.profiles.get_mut(cx.profile) {
-                            if let Some(t) = p.tasks.get_mut(cx.task) {
+                        if let Some(t) = cx.active_task_mut() {
+                            {
                                 crate::editor::toggle_bool_flag(&mut t.flags, field_index);
                             }
                         }

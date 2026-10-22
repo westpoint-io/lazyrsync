@@ -79,12 +79,16 @@ pub(crate) fn truncate(s: &str, max: usize) -> String {
 }
 
 pub(crate) fn hint_line(pairs: &[(&'static str, &'static str)]) -> Line<'static> {
+    hint_line_in(pairs, accent())
+}
+
+pub(crate) fn hint_line_in(pairs: &[(&'static str, &'static str)], key: Color) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     for (i, (k, d)) in pairs.iter().enumerate() {
         if i > 0 {
             spans.push("   ·   ".dim());
         }
-        spans.push((*k).fg(accent()));
+        spans.push((*k).fg(key));
         spans.push(format!(" {d}").fg(Color::Reset));
     }
     Line::from(spans).centered()

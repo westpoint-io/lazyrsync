@@ -83,6 +83,18 @@ next directory (`1/`, `2/`, …).
 
 ![Snapshots](assets/snapshot.gif)
 
+### Quick transfer
+
+`t` sends a folder somewhere once — a Source, a Destination, no profile and no
+task. It lands in the **Runs** panel marked `»`, where `a` keeps it as a real
+task and `d` throws it away.
+
+### Run history
+
+Every finished run is recorded, from the TUI and from `lazyrsync run` alike.
+`lazyrsync log` prints them; `@` hides or shows the **Command log** panel,
+which replays the recent ones at startup.
+
 ## Install
 
 **rsync 3.1 or later** must be on your `$PATH` — the preview needs
@@ -141,6 +153,8 @@ lazyrsync run backups/photos-3f2a     # a single task, by id from `list`
 lazyrsync run backups -n              # real dry run, changes nothing
 lazyrsync run backups --yes           # required if any task uses --delete
 lazyrsync run backups -v              # add rsync's own output for each task
+lazyrsync log                         # the 20 most recent runs, oldest first
+lazyrsync log --limit 5               # fewer
 ```
 
 Flags compose freely — `lazyrsync run backups/photos-3f2a -n --yes` is valid.
@@ -308,12 +322,15 @@ Press `?` in the app for the full, context-aware list. The essentials:
 | `j`/`k`, `↑`/`↓` | Move the cursor |
 | `space` / `enter` | Select the task (or toggle the highlighted flag) |
 | `a` | Add a task (or profile, on the Profiles sub-tab) |
+| `t` | Quick transfer — run a Source → Destination without saving it |
 | `p` | Preview (dry-run) the selected task |
 | `r` / `R` | Run the selected task / run every task in the profile |
 | `e` / `s` / `i` / `x` | Edit Basics / SSH / Filters / Advanced |
 | `d` | Delete (confirm first) |
 | `V` | Visual range (multi-select), then `r`/`d` acts on the block |
+| `a` / `d` | On the Runs panel, keep a quick transfer as a task / discard it |
 | `c` | Cancel the running job |
+| `@` | Show or hide the Command log |
 | `/` | Filter the list, or search the run output |
 | `q` / `Esc` | Quit |
 
@@ -327,6 +344,10 @@ Profiles and settings live under `$XDG_CONFIG_HOME/lazyrsync/` (typically
 
 If `XDG_CONFIG_HOME` is unset, the path falls back to
 `~/.config/lazyrsync/profiles.toml`.
+
+Run history is state, not config, so it lives under `$XDG_STATE_HOME`
+(typically `~/.local/state/lazyrsync/history.toml`). The 200 most recent runs
+are kept; an unreadable file reads as empty.
 
 ### `profiles.toml`
 
@@ -428,6 +449,24 @@ Every prompt has its own opt-out in `settings.toml`, all `false` by default:
 
 `skip_run_confirm` removes the last prompt before a transfer, including for
 tasks that use `--delete`.
+
+### Run history & the Command log
+
+```toml
+history  = true       # record every finished run
+log      = "normal"   # "quiet" | "normal" | "verbose"
+log_size = 8          # height of the Command log, in lines
+show_log = true       # whether the panel starts visible
+```
+
+`history = false` stops both the recording and the startup replay. No level
+hides a failure:
+
+| Level | Shows |
+|-------|-------|
+| `quiet` | errors and warnings |
+| `normal` | the above, plus run starts and outcomes |
+| `verbose` | the above, plus the resolved rsync command and config changes |
 
 ### Choosing which rsync runs
 

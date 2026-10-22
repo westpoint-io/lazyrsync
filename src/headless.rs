@@ -3,6 +3,7 @@ use std::process::{Command, Stdio};
 use anstyle::{AnsiColor, Color, Style};
 use anyhow::{anyhow, Result};
 
+use crate::history;
 use crate::profile::{Profile, Task};
 use crate::rsync;
 
@@ -85,6 +86,7 @@ fn succeeded(code: i32) -> bool {
 }
 
 fn spawn_task(task: &Task, dry_run: bool, verbose: bool) -> Result<i32> {
+    rsync::check_ssh(task).map_err(|e| anyhow::anyhow!(e))?;
     if !dry_run {
         rsync::prepare_dest(task)?;
     }
@@ -95,7 +97,22 @@ fn spawn_task(task: &Task, dry_run: bool, verbose: bool) -> Result<i32> {
     Ok(status.code().unwrap_or(COULD_NOT_START))
 }
 
+pub fn log(limit: usize) -> i32 {
+    let runs = history::load();
+    if runs.is_empty() {
+        anstream::eprintln!("{PROSE}no runs recorded yet{PROSE:#}");
+        return 0;
+    }
+    for r in runs.iter().rev().take(limit).rev() {
+        println!("{}", history::line(r));
+    }
+    0
+}
+
 pub fn run(profiles: &[Profile], target: &str, dry_run: bool, yes: bool, verbose: bool) -> i32 {
+    let history_on = crate::store::Settings::load()
+        .map(|s| s.history)
+        .unwrap_or(true);
     let tasks = match select(profiles, target) {
         Ok(t) => t,
         Err(e) => {
@@ -146,6 +163,22 @@ pub fn run(profiles: &[Profile], target: &str, dry_run: bool, yes: bool, verbose
             }
         };
         let elapsed = started.elapsed().as_secs_f64();
+        history::append(
+            history::Record {
+                at: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
+                task: t.id.clone(),
+                outcome: if succeeded(code) {
+                    history::Outcome::Ok
+                } else {
+                    history::Outcome::Failed
+                },
+                code,
+                files: None,
+                secs: elapsed as u64,
+                dry_run,
+            },
+            history_on,
+        );
         let counter = format!("[{}/{count}]", i + 1);
         let label = format!("{:<width$}", t.label);
         if succeeded(code) {

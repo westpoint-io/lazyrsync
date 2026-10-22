@@ -8,7 +8,7 @@ use crate::profile::{Profile, Task};
 use crate::store::{Settings, Store};
 
 use crate::popups::{
-    AddTask, Alert, ConfirmClearFilters, ConfirmDelete, ConfirmRun, Help, Prompt, SectionEdit,
+    AddTask, Alert, ConfirmClearFilters, ConfirmDelete, ConfirmRun, Help, Keep, Prompt, SectionEdit,
 };
 use crate::screens::browse::Browse;
 
@@ -39,6 +39,7 @@ pub struct Ctx {
     pub pcursor: usize,
     pub task: usize,
     pub subtab: usize,
+    pub quick: Vec<Task>,
 }
 
 impl Ctx {
@@ -47,7 +48,31 @@ impl Ctx {
     }
 
     pub fn active_task(&self) -> Option<&Task> {
-        self.active_profile().and_then(|p| p.tasks.get(self.task))
+        self.quick
+            .last()
+            .or_else(|| self.active_profile().and_then(|p| p.tasks.get(self.task)))
+    }
+
+    pub fn quick_index(&self, id: &str) -> Option<usize> {
+        self.quick.iter().position(|t| t.id == id)
+    }
+
+    pub fn active_task_mut(&mut self) -> Option<&mut Task> {
+        if !self.quick.is_empty() {
+            return self.quick.last_mut();
+        }
+        let (profile, task) = (self.profile, self.task);
+        self.store
+            .profiles
+            .get_mut(profile)
+            .and_then(|p| p.tasks.get_mut(task))
+    }
+
+    pub fn save_tasks(&mut self, msg: &str) {
+        if !self.quick.is_empty() {
+            return;
+        }
+        self.save(msg);
     }
 
     pub fn clamp(&mut self) {
@@ -65,6 +90,9 @@ impl Ctx {
     }
 
     pub fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
+        if !self.settings.log.shows(kind) {
+            return;
+        }
         let at = Local::now().format("%H:%M:%S").to_string();
         self.log.push(LogEntry {
             at,
@@ -101,6 +129,8 @@ pub enum Cmd {
     Close,
     RequestRun(Vec<Task>),
     StartRun(Vec<Task>),
+    CloseToTasks,
+    CloseToRuns,
 }
 
 pub trait Component {
@@ -124,13 +154,14 @@ pub enum Overlay {
     ConfirmRun(ConfirmRun),
     Alert(Alert),
     Help(Help),
+    Keep(Keep),
 }
 
 impl Overlay {
     fn is_text_input(&self) -> bool {
         matches!(
             self,
-            Overlay::Prompt(_) | Overlay::AddTask(_) | Overlay::Edit(_)
+            Overlay::Prompt(_) | Overlay::AddTask(_) | Overlay::Edit(_) | Overlay::Keep(_)
         )
     }
 
@@ -144,6 +175,7 @@ impl Overlay {
             Overlay::ConfirmRun(c) => c.draw(frame, area, cx),
             Overlay::Alert(a) => a.draw(frame, area, cx),
             Overlay::Help(h) => h.draw(frame, area),
+            Overlay::Keep(k) => k.draw(frame, area, cx),
         }
     }
 
@@ -157,6 +189,7 @@ impl Overlay {
             Overlay::ConfirmRun(c) => c.on_key(key, cx),
             Overlay::Alert(a) => a.on_key(key, cx),
             Overlay::Help(h) => h.on_key(key),
+            Overlay::Keep(k) => k.on_key(key, cx),
         }
     }
 
@@ -204,11 +237,25 @@ impl App {
                 pcursor: 0,
                 task: 0,
                 subtab: 0,
+                quick: Vec::new(),
             },
             browse: Browse::new(),
             overlay: None,
             running: true,
         };
+        let replay = if app.ctx.settings.history { 20 } else { 0 };
+        for r in crate::history::load().iter().rev().take(replay).rev() {
+            let kind = match r.outcome {
+                crate::history::Outcome::Ok => LogKind::Done,
+                crate::history::Outcome::Failed => LogKind::Error,
+                crate::history::Outcome::Cancelled => LogKind::Warn,
+            };
+            app.ctx.log.push(LogEntry {
+                at: r.at.clone(),
+                kind,
+                text: crate::history::summary(r),
+            });
+        }
         if let Some(warning) = crate::rsync::capability_warning() {
             app.ctx.push_log(LogKind::Warn, warning);
         }
@@ -322,6 +369,17 @@ impl App {
             Cmd::Overlay(overlay) => self.overlay = Some(overlay),
             Cmd::Close => {
                 self.overlay = None;
+                self.browse.on_resume(&self.ctx);
+            }
+            Cmd::CloseToTasks => {
+                self.overlay = None;
+                self.browse.focus_tasks();
+                self.browse.on_resume(&self.ctx);
+            }
+            Cmd::CloseToRuns => {
+                self.overlay = None;
+                self.browse.park_quick(&self.ctx);
+                self.browse.focus_runs();
                 self.browse.on_resume(&self.ctx);
             }
             Cmd::RequestRun(batch) => self.apply(Cmd::StartRun(batch)),

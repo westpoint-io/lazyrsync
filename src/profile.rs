@@ -253,6 +253,21 @@ impl Task {
         format!("{}-{}", slugify(&self.label), self.content_token())
     }
 
+    pub fn unique_id<'a>(base: &str, taken: impl Iterator<Item = &'a str>) -> String {
+        let used: HashSet<&str> = taken.collect();
+        if !used.contains(base) {
+            return base.to_string();
+        }
+        let mut n = 2;
+        loop {
+            let cand = format!("{base}-{n}");
+            if !used.contains(cand.as_str()) {
+                return cand;
+            }
+            n += 1;
+        }
+    }
+
     pub fn destructive(&self) -> bool {
         self.flags.delete || self.flags.delete_excluded
     }
@@ -261,6 +276,19 @@ impl Task {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unique_id_only_suffixes_when_it_has_to() {
+        assert_eq!(Task::unique_id("backup", ["other"].into_iter()), "backup");
+        assert_eq!(
+            Task::unique_id("backup", ["backup"].into_iter()),
+            "backup-2"
+        );
+        assert_eq!(
+            Task::unique_id("backup", ["backup", "backup-2"].into_iter()),
+            "backup-3"
+        );
+    }
 
     #[test]
     fn delete_excluded_alone_counts_as_destructive() {

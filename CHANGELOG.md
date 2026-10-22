@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-22
+
+### Added
+
+- A quick transfer: `t` runs a Source → Destination once without saving a
+  profile or a task first. It appears in the Runs panel marked `»` and stays
+  there until `a` keeps it as a real task or `d` discards it — so the one-off
+  that turns out to be worth repeating does not have to be retyped. Quitting
+  with one still marked `»` throws it away.
+- SSH port, key file and extra arguments on a quick transfer, shown only when
+  a path is remote. They are the same options a saved task offers under `s`,
+  and they carry over when the transfer is kept.
+- The reason a remote transfer could not start, instead of a bare failure.
+  lazyrsync probes the connection with `ssh -o BatchMode=yes -o
+  ConnectTimeout=5` and reports what ssh said — wrong port, refused key,
+  unknown host.
+- A record of every finished run, written from the TUI and from
+  `lazyrsync run` alike to `$XDG_STATE_HOME/lazyrsync/history.toml`. The new
+  `lazyrsync log` subcommand prints them, and the Command log replays the
+  recent ones at startup. The 200 most recent are kept.
+- `history`, `log`, `log_size` and `show_log` in `settings.toml`, plus `@` to
+  hide or show the Command log for the session. The `log` level is `quiet`,
+  `normal` or `verbose`; no level hides an error or a warning.
+
 ## [0.3.0] - 2026-08-10
 
 ### Added
@@ -88,7 +112,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dry-run diff preview, live run progress with cancellation, a filters/flags
   editor, SSH remotes (`user@host:/path`), and local snapshots.
 
-[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/westpoint-io/lazyrsync/releases/tag/v0.1.0

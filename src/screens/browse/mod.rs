@@ -38,6 +38,20 @@ pub struct Browse {
 }
 
 impl Browse {
+    pub(crate) fn focus_tasks(&mut self) {
+        self.focus = 0;
+    }
+
+    pub(crate) fn focus_runs(&mut self) {
+        self.focus = 3;
+    }
+
+    pub(crate) fn park_quick(&mut self, cx: &Ctx) {
+        if let Some(t) = cx.quick.last() {
+            self.runs.park(t.clone());
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             focus: 0,
@@ -80,6 +94,8 @@ impl Browse {
     }
 
     pub fn on_resume(&mut self, cx: &Ctx) {
+        let alive: Vec<String> = cx.quick.iter().map(|t| t.id.clone()).collect();
+        self.runs.prune_pending(&alive);
         let ntasks = cx.active_profile().map_or(0, |p| p.tasks.len());
         if self.visual.is_some() && ntasks != self.visual_len {
             self.visual = None;

@@ -109,6 +109,11 @@ const LOCAL_PROFILES: &[Binding] = &[
 
 const GLOBAL: &[Binding] = &[
     Binding {
+        key: "t",
+        desc: "quick transfer",
+        long: "Run a Source -> Destination once without saving a profile or task. It appears in the Runs panel marked >>, where a keeps it as a real task and d discards it.",
+    },
+    Binding {
         key: "<tab>",
         desc: "switch panel",
         long: "Move focus between Status, Flags, and Filters (also 1-3).",
@@ -137,6 +142,11 @@ const GLOBAL: &[Binding] = &[
         key: "<pgdown>",
         desc: "scroll down",
         long: "Scroll the dry-run preview down (J and the wheel also work).",
+    },
+    Binding {
+        key: "@",
+        desc: "toggle log",
+        long: "Show or hide the Command log panel.",
     },
     Binding {
         key: "+",

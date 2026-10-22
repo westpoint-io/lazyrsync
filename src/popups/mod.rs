@@ -5,6 +5,7 @@ mod confirm_delete;
 mod confirm_run;
 mod edit;
 mod help;
+mod keep;
 mod prompt;
 
 pub use add_task::AddTask;
@@ -14,4 +15,5 @@ pub use confirm_delete::ConfirmDelete;
 pub use confirm_run::ConfirmRun;
 pub use edit::SectionEdit;
 pub use help::Help;
+pub use keep::Keep;
 pub use prompt::Prompt;
