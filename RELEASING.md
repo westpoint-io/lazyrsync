@@ -22,12 +22,14 @@ and attaches them (with SHA-256 checksums) to the GitHub Release for that tag.
 
 ## Targets
 
-| Platform      | Target triple                |
-| ------------- | ---------------------------- |
-| Linux x86_64  | `x86_64-unknown-linux-gnu`   |
-| Linux aarch64 | `aarch64-unknown-linux-gnu`  |
-| macOS x86_64  | `x86_64-apple-darwin`        |
-| macOS aarch64 | `aarch64-apple-darwin`       |
+| Platform             | Target triple                |
+| -------------------- | ---------------------------- |
+| Linux x86_64         | `x86_64-unknown-linux-gnu`   |
+| Linux aarch64        | `aarch64-unknown-linux-gnu`  |
+| Linux x86_64 (musl)  | `x86_64-unknown-linux-musl`  |
+| Linux aarch64 (musl) | `aarch64-unknown-linux-musl` |
+| macOS x86_64         | `x86_64-apple-darwin`        |
+| macOS aarch64        | `aarch64-apple-darwin`       |
 
 Assets are named `lazyrsync-<target>.tar.gz` with the binary at the archive
 root, matching `[package.metadata.binstall]` in `Cargo.toml` so
