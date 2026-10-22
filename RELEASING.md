@@ -19,6 +19,16 @@ and attaches them (with SHA-256 checksums) to the GitHub Release for that tag.
 
 5. The workflow builds the targets below and publishes the Release. Verify the
    assets appear, then edit the Release notes if needed.
+6. Publish to the package managers:
+
+   ```bash
+   scripts/release.sh X.Y.Z   # AUR — needs your AUR ssh key
+   cargo publish              # crates.io
+   ```
+
+   Homebrew needs nothing: lazyrsync is in homebrew-core and BrewTestBot bumps
+   the formula from the tag. The script checks the GitHub Release exists before
+   it touches AUR, so run it after step 5.
 
 ## Targets
 
