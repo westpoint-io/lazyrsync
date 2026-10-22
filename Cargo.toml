@@ -1,6 +1,6 @@
 [package]
 name = "lazyrsync"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "A terminal UI for rsync — profiles, honest dry-run preview, live progress. Runs over SSH where no GUI can."
 license = "MIT"
