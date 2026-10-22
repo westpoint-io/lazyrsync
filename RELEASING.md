@@ -19,15 +19,27 @@ and attaches them (with SHA-256 checksums) to the GitHub Release for that tag.
 
 5. The workflow builds the targets below and publishes the Release. Verify the
    assets appear, then edit the Release notes if needed.
+6. Publish to the package managers:
+
+   ```bash
+   scripts/release.sh X.Y.Z   # AUR — needs your AUR ssh key
+   cargo publish              # crates.io
+   ```
+
+   Homebrew needs nothing: lazyrsync is in homebrew-core and BrewTestBot bumps
+   the formula from the tag. The script checks the GitHub Release exists before
+   it touches AUR, so run it after step 5.
 
 ## Targets
 
-| Platform      | Target triple                |
-| ------------- | ---------------------------- |
-| Linux x86_64  | `x86_64-unknown-linux-gnu`   |
-| Linux aarch64 | `aarch64-unknown-linux-gnu`  |
-| macOS x86_64  | `x86_64-apple-darwin`        |
-| macOS aarch64 | `aarch64-apple-darwin`       |
+| Platform             | Target triple                |
+| -------------------- | ---------------------------- |
+| Linux x86_64         | `x86_64-unknown-linux-gnu`   |
+| Linux aarch64        | `aarch64-unknown-linux-gnu`  |
+| Linux x86_64 (musl)  | `x86_64-unknown-linux-musl`  |
+| Linux aarch64 (musl) | `aarch64-unknown-linux-musl` |
+| macOS x86_64         | `x86_64-apple-darwin`        |
+| macOS aarch64        | `aarch64-apple-darwin`       |
 
 Assets are named `lazyrsync-<target>.tar.gz` with the binary at the archive
 root, matching `[package.metadata.binstall]` in `Cargo.toml` so
