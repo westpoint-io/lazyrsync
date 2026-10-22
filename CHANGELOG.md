@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-22
+
 ### Added
 
 - A quick transfer: `t` runs a Source → Destination once without saving a
@@ -110,7 +112,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dry-run diff preview, live run progress with cancellation, a filters/flags
   editor, SSH remotes (`user@host:/path`), and local snapshots.
 
-[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/westpoint-io/lazyrsync/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/westpoint-io/lazyrsync/compare/v0.1.0...v0.1.1
