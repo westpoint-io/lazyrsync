@@ -145,6 +145,37 @@ pub fn read_segments<R: Read>(reader: &mut BufReader<R>, mut on_seg: impl FnMut(
     }
 }
 
+fn parse_bytes(token: &str) -> u64 {
+    let (mantissa, scale) = match token.chars().last() {
+        Some('K') => (&token[..token.len() - 1], 1u64 << 10),
+        Some('M') => (&token[..token.len() - 1], 1u64 << 20),
+        Some('G') => (&token[..token.len() - 1], 1u64 << 30),
+        Some('T') => (&token[..token.len() - 1], 1u64 << 40),
+        _ => (token, 1),
+    };
+    if scale == 1 {
+        let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();
+        return digits.parse().unwrap_or(0);
+    }
+    let last_separator = mantissa.rfind(['.', ',']);
+    let decimal: String = mantissa
+        .char_indices()
+        .filter_map(|(i, c)| {
+            if c.is_ascii_digit() {
+                Some(c)
+            } else if Some(i) == last_separator {
+                Some('.')
+            } else {
+                None
+            }
+        })
+        .collect();
+    decimal
+        .parse::<f64>()
+        .map(|n| (n * scale as f64) as u64)
+        .unwrap_or(0)
+}
+
 pub fn parse_progress(line: &str) -> Option<Progress> {
     if !line.contains('%') {
         return None;
@@ -153,8 +184,7 @@ pub fn parse_progress(line: &str) -> Option<Progress> {
     let mut p = Progress::default();
 
     if let Some(first) = toks.first() {
-        let digits: String = first.chars().filter(|c| c.is_ascii_digit()).collect();
-        p.bytes = digits.parse().unwrap_or(0);
+        p.bytes = parse_bytes(first);
     }
     for t in &toks {
         if let Some(pct) = t.strip_suffix('%') {
@@ -240,5 +270,28 @@ mod tests {
         let p = parse_progress("100  50%  2MB/s  0:00:01 (xfr#1, ir-chk=10/20)").unwrap();
         assert_eq!(p.files_total, 20);
         assert_eq!(p.files_done, 10);
+    }
+
+    #[test]
+    fn human_readable_byte_counts_keep_their_scale() {
+        let p =
+            parse_progress("     32,77K   1%    1,38GB/s    0:00:00 (xfr#0, to-chk=1/2)").unwrap();
+        assert_eq!(p.bytes, 33_556);
+        let p =
+            parse_progress("      3,00M 100%    1,38GB/s    0:00:00 (xfr#1, to-chk=0/2)").unwrap();
+        assert_eq!(p.bytes, 3 * 1024 * 1024);
+        let p =
+            parse_progress("      3.00M 100%    1.38GB/s    0:00:00 (xfr#1, to-chk=0/2)").unwrap();
+        assert_eq!(p.bytes, 3 * 1024 * 1024);
+    }
+
+    #[test]
+    fn grouped_byte_counts_are_read_in_full() {
+        let p = parse_progress("      3.000.000 100%    1,38GB/s    0:00:00 (xfr#1, to-chk=0/2)")
+            .unwrap();
+        assert_eq!(p.bytes, 3_000_000);
+        let p = parse_progress("      1,234,567  45%    1.23MB/s  0:00:12 (xfr#3, to-chk=120/345)")
+            .unwrap();
+        assert_eq!(p.bytes, 1_234_567);
     }
 }
